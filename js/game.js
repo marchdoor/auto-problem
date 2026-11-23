@@ -903,7 +903,9 @@ function toTitle() {
   showScreen('title');
   document.documentElement.style.setProperty('--gray', '1');
   $('#btn-continue').classList.toggle('hidden', !store.get('np_run', null));
-  Audio2.playSong('assets/music/menusong.mp3');
+  // the menu song comes back at a random speed and pitch every time (medium: between about 0.72x and 1.4x, never close to normal)
+  const sign = Math.random() < 0.5 ? -1 : 1, menuRate = Math.exp(sign * (0.15 + Math.random() * 0.19));
+  Audio2.playSong('assets/music/menusong.mp3', true, menuRate);
   const col = $('#collage'); col.innerHTML = '';
   const ids = ['giuseppe', 'noproblem', 'john', 'bondo2', 'darius', 'funny', 'crosos', 'man', 'g0', 'renault'];
   ids.forEach((id, i) => {

@@ -113,12 +113,13 @@ function nextSong(pl) {
 
 Object.assign(Audio2, {
   active: new Set(), exclusiveUntil: 0, songPath: null,
-  playSong(path, loop = true) {
+  playSong(path, loop = true, rate = 1) {
     if (!path || this.songPath === path) return;
     this.mus = 1; clearInterval(this.musT); this.songPath = path; this.musicName = null; this.songT0 = Date.now();
     if (this.music) { this.music.pause(); this.music = null; }
     const a = new Audio(encodePath(path));
     a.loop = loop; a.volume = this.volume * 0.5 * this.duck * this.mus; this.music = a;
+    if (rate !== 1) { a.preservesPitch = a.mozPreservesPitch = a.webkitPreservesPitch = false; a.playbackRate = rate; }   // speed and pitch change together
     this.tryPlayMusic();
   },
   // browsers refuse to play sound before the first tap/click on the page.
