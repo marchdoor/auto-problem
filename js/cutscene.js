@@ -63,7 +63,7 @@ const CUT = {
   close(fast) {
     const el = this.el; if (!el) return;
     const v = this.v, key = this.key, seen = this.seen;
-    this.el = null; this.v = null; this.active = false;
+    this.el = null; this.v = null; this.active = false; this.lastOn = false;
     if (this.sd) { clearInterval(this.sd.timer); this.sd = null; }
     Audio2.setDuck(1, fast ? 150 : 1100);
     if (seen && key) ACH.unlock(CUTSCENES[key].ach);
@@ -107,7 +107,7 @@ const CUT = {
     const v = this.v, c = CUTSCENES.suddenlast;
     v.loop = false; v.src = c.src; v.muted = Audio2.muted; v.volume = Math.min(1, Audio2.volume / 0.6);
     this.el.querySelector('.pip-bar span').textContent = c.title;
-    this.key = 'suddenlast'; this.seen = false;
+    this.key = 'suddenlast'; this.seen = false; this.lastOn = true;
     v.addEventListener('playing', () => { this.seen = true; }, { once: true });
     v.play().catch(() => {});
     v.addEventListener('ended', () => { if (this.v === v) this.close(); }, { once: true });

@@ -614,7 +614,7 @@ async function playBattle(frames, opts = {}) {
   }
   for (let i = 0; i < frames.length; i++) {
     const f = frames[i];
-    if (skipping) { if (CUT.active && !CUT.sd) CUT.close(true); prev = f; continue; }
+    if (skipping) { if (CUT.active && !CUT.sd && !CUT.lastOn) CUT.close(true); prev = f; continue; }
     let hold, closeCut = false;
     if (syncEnd) hold = wSum[i] > 0 ? Math.max(40, (syncEnd - Date.now() - fSum[i]) * w[i] / wSum[i]) : 0;
     if (cut && i === cut.k) {
@@ -632,7 +632,7 @@ async function playBattle(frames, opts = {}) {
   }
   if (syncEnd) speed = savedSpeed;
   if (opts.sudden && CUT.sd) { Audio2.stopMusic(); CUT.lastDeath(); }   // skipped, or the last death never fired
-  else if (CUT.active && !CUT.sd) CUT.close(true);
+  else if (CUT.active && !CUT.sd && !CUT.lastOn) CUT.close(true);
   if (prev) { try { renderBattleTeams(prev); } catch (e) { console.error(e); } }
   try { ACH.frames(frames); } catch (e) { console.error(e); }
   if (!syncEnd) await sleep(500);
