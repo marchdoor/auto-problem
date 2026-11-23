@@ -584,3 +584,5 @@ body.endless .wins-max { display: none; }
 #ach-pop small { display: block; font-size: 11px; color: var(--tc); text-transform: uppercase; letter-spacing: .08em; font-weight: 900; }
 #ach-pop b { font: 900 20px 'Arial Black'; color: #fff; text-transform: lowercase; }
 @media (max-width: 760px), (pointer: coarse) { .ach-grid { grid-template-columns: 1fr; } .ach-ico { width: 60px; height: 60px; } }
+.ach-ico.secret img { filter: brightness(0) !important; }
+.ach-card.locked .card, .ach-card.locked .card * { filter: brightness(0) !important; }

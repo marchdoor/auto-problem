@@ -168,7 +168,7 @@ const ACH = {
   // ---- icons ----
   iconHTML(a, locked) {
     const fb = 'assets/' + a.img;
-    return `<div class="ach-ico${locked ? ' locked' : ''}"><img src="assets/ach/${a.id}.png" onerror="this.onerror=null;this.src='${fb}'" alt=""></div>`;
+    return `<div class="ach-ico${locked ? ' locked' : ''}${locked && a.secret ? ' secret' : ''}"><img src="assets/ach/${a.id}.png" onerror="this.onerror=null;this.src='${fb}'" alt=""></div>`;
   },
 
   // ---- the page ----
