@@ -12,4 +12,10 @@
 //
 //  (For a quick test on one machine you can also set localStorage 'np_turn' to the same list as JSON.)
 // ============================================================
-const TURN_SERVERS = [];
+const TURN_SERVERS = [
+  { urls: 'stun:stun.relay.metered.ca:80' },
+  { urls: 'turn:global.relay.metered.ca:80', username: '27ce05b5450f35b5f96b8dc5', credential: 'kiIrOeovXBSKxAc+' },
+  { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: '27ce05b5450f35b5f96b8dc5', credential: 'kiIrOeovXBSKxAc+' },
+  { urls: 'turn:global.relay.metered.ca:443', username: '27ce05b5450f35b5f96b8dc5', credential: 'kiIrOeovXBSKxAc+' },
+  { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: '27ce05b5450f35b5f96b8dc5', credential: 'kiIrOeovXBSKxAc+' },
+];
