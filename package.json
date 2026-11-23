@@ -1,0 +1,19 @@
+{
+  "name": "no-problem-auto-problem",
+  "productName": "NoProblemAutoProblem",
+  "version": "0.1.0",
+  "description": "no problem: auto problem - a turn based auto battler",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "node tools/manifest.js && electron-packager . NoProblemAutoProblem --platform=win32 --arch=x64 --out=dist --overwrite --ignore=^/dist --ignore=^/release --ignore=^/tools"
+  },
+  "devDependencies": {
+    "@electron/packager": "18.3.6",
+    "electron": "33.2.1"
+  },
+  "dependencies": {
+    "peerjs": "^1.5.4"
+  }
+}

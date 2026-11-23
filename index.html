@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0b">
+<title>no problem: auto problem</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div id="grain"></div>
+
+  <!-- TITLE -->
+  <section id="title" class="screen active">
+    <div class="title-collage" id="collage"></div>
+    <div class="title-box">
+      <h1>no problem<span>: auto problem</span></h1>
+      <p class="sub">a turn based auto battler. build a team, end the line.</p>
+      <div class="menu">
+        <button id="btn-continue" class="big hidden">continue run</button>
+        <button id="btn-new" class="big">new run</button>
+        <button id="btn-online" class="big">play online</button>
+        <button id="btn-how">how to play</button>
+        <button id="btn-units">all characters</button>
+      </div>
+      <p class="rights">RIGHTS RESERVED TO MARCHDOOR™</p>
+    </div>
+  </section>
+
+  <!-- SHOP -->
+  <section id="shop" class="screen">
+    <header class="hud">
+      <div class="stat"><span class="ico">🪙</span><b id="hud-gold">10</b></div>
+      <div class="stat"><span class="ico">❤️</span><b id="hud-lives">5</b></div>
+      <div class="stat"><span class="ico">🏆</span><b id="hud-wins">0</b>/10</div>
+      <div class="stat"><span class="lbl">turn</span><b id="hud-turn">1</b></div>
+      <div class="stat timer hidden" id="hud-timer"></div>
+      <div class="stat sd hidden" id="hud-sd">☠ sudden death</div>
+      <div class="stat nike" id="hud-nike">nike inc status: 0 dead 104 to go</div>
+      <div class="spacer"></div>
+      <button class="icon" id="btn-mute" title="mute">🔊</button>
+      <button class="icon" id="btn-menu" title="menu">☰</button>
+    </header>
+
+    <div class="board">
+      <div class="row-label">your team <span>front →</span></div>
+      <div class="team-row" id="team-row"></div>
+
+      <div class="row-label">shop <span id="tier-label">tier 1</span></div>
+      <div class="shop-row">
+        <div id="shop-units" class="shop-units"></div>
+        <div class="divider"></div>
+        <div id="shop-items" class="shop-items"></div>
+      </div>
+    </div>
+
+    <div class="info" id="info"><div class="info-empty">tap a character to see what they do. tap a shop card, then a team slot to buy (on PC you can also drag).</div></div>
+
+    <footer class="controls">
+      <button id="btn-roll" class="ctl">roll <small>1🪙</small></button>
+      <button id="btn-freeze" class="ctl" disabled>freeze ❄</button>
+      <button id="btn-sell" class="ctl danger" disabled>sell</button>
+      <div class="spacer"></div>
+      <button id="btn-end" class="ctl go">end turn ▶</button>
+    </footer>
+    <div class="toast" id="toast"></div>
+  </section>
+
+  <!-- BATTLE -->
+  <section id="battle" class="screen">
+    <header class="hud">
+      <div class="stat"><span class="ico">❤️</span><b id="b-lives">5</b></div>
+      <div class="stat"><span class="ico">🏆</span><b id="b-wins">0</b>/10</div>
+      <div class="stat"><span class="lbl">turn</span><b id="b-turn">1</b></div>
+      <div class="spacer"></div>
+      <div class="speed">
+        <button data-speed="1" class="sp active">1x</button>
+        <button data-speed="2" class="sp">2x</button>
+        <button data-speed="4" class="sp">4x</button>
+        <button id="btn-skip" class="sp">skip ⏭</button>
+      </div>
+    </header>
+    <div class="arena">
+      <div class="side-name left">you</div>
+      <div class="side-name right" id="enemy-name">nike inc.</div>
+      <div class="lane">
+        <div class="bteam mine" id="b-mine"></div>
+        <div class="vs">VS</div>
+        <div class="bteam theirs" id="b-theirs"></div>
+      </div>
+      <div class="caption" id="caption"></div>
+      <div class="sd-panel hidden" id="sd-panel"></div>
+    </div>
+  </section>
+
+  <!-- RESULT overlay -->
+  <div id="result" class="overlay hidden">
+    <div class="result-box">
+      <h2 id="result-title">win</h2>
+      <p id="result-cap" class="cap-style">end of the line</p>
+      <p id="result-sub"></p>
+      <button id="btn-result" class="big">continue</button>
+    </div>
+  </div>
+
+  <!-- generic modal -->
+  <div id="modal" class="overlay hidden">
+    <div class="modal-box">
+      <button class="close" id="modal-close">✕</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/manifest.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+<script src="js/vendor/peerjs.min.js"></script>
+<script src="js/net.js"></script>
+</body>
+</html>
