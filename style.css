@@ -586,3 +586,32 @@ body.endless .wins-max { display: none; }
 @media (max-width: 760px), (pointer: coarse) { .ach-grid { grid-template-columns: 1fr; } .ach-ico { width: 60px; height: 60px; } }
 .ach-ico.secret img { filter: brightness(0) !important; }
 .ach-card.locked .card, .ach-card.locked .card * { filter: brightness(0) !important; }
+
+/* ---------------- cutscene picture-in-picture ---------------- */
+.pip { position: absolute; right: 2vw; bottom: 14vh; width: min(34vw, 520px); z-index: 40; pointer-events: none; transform-origin: center; background: #000; border: 3px solid #fff; box-shadow: 8px 8px 0 #000, 0 0 30px rgba(255,255,255,.25); }
+.pip.big { inset: 0; margin: auto; width: min(88vw, 960px); height: fit-content; z-index: 80; }
+.pip.interactive { pointer-events: auto; }
+.pip-screen { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #000; }
+.pip-screen video { width: 100%; height: 100%; display: block; object-fit: cover; }
+.pip-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); box-shadow: inset 0 0 40px rgba(0,0,0,.55); }
+.pip-white { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.pip-bar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: #111; font: 900 11px 'Arial Black'; text-transform: uppercase; letter-spacing: .08em; }
+.pip-bar span { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pip-bar .rec { width: 9px; height: 9px; border-radius: 50%; background: #ff3b3b; animation: recBlink 1s steps(2) infinite; flex: none; }
+.pip-x { background: #1b1b1b; color: #fff; border: 1px solid #666; padding: 0 8px; cursor: pointer; font: 900 12px 'Arial Black'; }
+@keyframes recBlink { 50% { opacity: .15; } }
+/* turning on: a dot stretches into a white line, then the picture opens */
+.pip.opening { animation: pipOn .55s cubic-bezier(.2,.8,.3,1) both; }
+.pip.opening .pip-white { animation: whiteOn .55s ease-out both; }
+@keyframes pipOn { 0% { transform: scale(0,.006); filter: brightness(9); } 30% { transform: scale(1,.006); filter: brightness(9); } 75% { transform: scale(1,1.05); filter: brightness(2.2); } 100% { transform: scale(1,1); filter: brightness(1); } }
+@keyframes whiteOn { 0%,50% { opacity: 1; } 100% { opacity: 0; } }
+/* turning off like an old cassette player: the picture goes white while it collapses to a line, then a dot */
+.pip.closing { animation: pipOff .75s cubic-bezier(.5,0,.8,.4) both; }
+.pip.closing .pip-white { animation: whiteOff .75s ease-in both; }
+@keyframes pipOff { 0% { transform: scale(1,1); filter: brightness(1); opacity: 1; } 28% { transform: scale(1,.9); filter: brightness(4); } 58% { transform: scale(1,.012); filter: brightness(10); opacity: 1; } 82% { transform: scale(.45,.012); filter: brightness(10); opacity: 1; } 100% { transform: scale(0,.004); filter: brightness(10); opacity: 0; } }
+@keyframes whiteOff { 0% { opacity: 0; } 25%,100% { opacity: 1; } }
+.ach-vid { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; max-width: 260px; }
+.ach-vid video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border: 2px solid var(--tc); background: #000; pointer-events: none; }
+.ach-watch { background: #1b1b1b; color: #fff; border: 2px solid var(--tc); padding: 6px 10px; font: 900 13px 'Arial Black'; cursor: pointer; }
+.ach-watch:hover { background: var(--tc); color: #000; }
+@media (max-width: 760px), (pointer: coarse) and (max-aspect-ratio: 1/1) { .pip:not(.big) { right: auto; left: 11vw; bottom: auto; top: 64px; width: 78vw; } }

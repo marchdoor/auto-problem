@@ -40,6 +40,14 @@ const ACH_LIST = [
     desc: 'fuse john tanner with a level 3 tanner john. he is tier 7 and never appears in the shop.',
     hint: 'two old friends can become something bigger.' },
 
+  // ---- cutscenes (you can watch them again here) ----
+  { id: 'cut_john', cat: 'cutscenes', tier: 'red', name: 'the rat is caught', img: 'units/john.png', secret: true, video: 'johnwin',
+    desc: 'john tanner and woto tolff meet front to front, and john tanner wins. the player pops out and the battle is timed to the video.',
+    hint: 'john tanner and the vodafone ceo might have words. one of them has to win.' },
+  { id: 'cut_vodafone', cat: 'cutscenes', tier: 'red', name: 'the rat survives', img: 'units/vodafone.png', secret: true, video: 'vodafonewin',
+    desc: 'john tanner and woto tolff meet front to front, and woto tolff wins.',
+    hint: 'john tanner and the vodafone ceo might have words. one of them has to win.' },
+
   // ---- runs ----
   { id: 'firstblood', cat: 'run', tier: 'bronze', name: 'first blood', img: 'units/noproblem.png', desc: 'win your first battle.' },
   { id: 'level3', cat: 'run', tier: 'bronze', name: 'ssj', img: 'units/tannerjohn.png', desc: 'get a character to level 3.' },
@@ -67,7 +75,7 @@ const ACH_LIST = [
   { id: 'banhammer', cat: 'online', tier: 'silver', name: 'banhammer', img: 'units/kenji.png', desc: 'in sudden death, remove a buff from an enemy character.' },
   { id: 'mutual', cat: 'online', tier: 'silver', name: 'mutual destruction', img: 'units/crosos.png', desc: 'in sudden death, both players agree to ban a card from each team.' },
 ];
-const ACH_CATS = { sounds: 'sounds', secret: 'secret characters', run: 'runs', endless: 'endless', online: 'online' };
+const ACH_CATS = { sounds: 'sounds', secret: 'secret characters', cutscenes: 'cutscenes', run: 'runs', endless: 'endless', online: 'online' };
 const ACH_TIERS = ['bronze', 'silver', 'gold', 'red'];
 
 const ACH = {
@@ -231,6 +239,7 @@ const ACH = {
         const done = !!d.done[a.id], hide = a.secret && !done;
         let extra = '';
         if (a.themes || (a.sound && done)) extra = this.playerHTML(a);
+        if (a.video && done) extra = `<div class="ach-vid"><video preload="metadata" muted playsinline src="${CUTSCENES[a.video].src}#t=1"></video><button class="ach-watch" data-key="${a.video}">▶ watch again</button></div>`;
         if (a.unit) extra = `<div class="ach-card${done ? '' : ' locked'}" data-unit="${a.unit}"></div>`;
         if (!done && a.items) { const n = d.items.length, t = Object.keys(ITEMS).length; extra = `<div class="ach-prog"><i style="width:${100 * n / t}%"></i></div><div class="ach-n">${n}/${t} items used</div>`; }
         if (!done && a.chaos) extra = `<div class="ach-prog"><i style="width:${100 * d.chaos.length / 6}%"></i></div><div class="ach-n">${d.chaos.length}/6 effects seen</div>`;
@@ -247,6 +256,7 @@ const ACH = {
     openModal(html);
     const root = $('#modal-body');
     this.wirePlayers(root);
+    root.querySelectorAll('.ach-watch').forEach(b => b.onclick = () => CUT.watch(b.dataset.key));
     const slot = root.querySelector('.ach-card');
     if (slot) { const u = newUnit(slot.dataset.unit); u.lvl = 1; slot.appendChild(cardEl(u)); }
   },

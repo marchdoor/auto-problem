@@ -5,7 +5,7 @@
 const SFX_NAMES = ['buy', 'sell', 'roll', 'merge', 'levelup', 'hit', 'faint', 'nuke', 'start', 'win', 'lose', 'giuseppe', 'freeze', 'click', 'item'];
 
 const Audio2 = {
-  ctx: null, files: {}, muted: false, volume: 0.6, level: 100, prevLevel: 100, music: null, musicName: null,
+  ctx: null, files: {}, duck: 1, muted: false, volume: 0.6, level: 100, prevLevel: 100, music: null, musicName: null,
   // volume is a level from 0 to 100 (saved). internal gain = 0.6 * level / 100
   init() {
     let l = 100;
@@ -35,7 +35,7 @@ const Audio2 = {
     const o = ac.createOscillator(), g = ac.createGain();
     o.type = type; o.frequency.setValueAtTime(freq, t);
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
-    g.gain.setValueAtTime(vol * this.volume, t);
+    g.gain.setValueAtTime(vol * this.volume * this.duck, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
   },
@@ -46,12 +46,12 @@ const Audio2 = {
     const d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
     const s = ac.createBufferSource(); s.buffer = buf;
     const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp;
-    const g = ac.createGain(); g.gain.value = vol * this.volume;
+    const g = ac.createGain(); g.gain.value = vol * this.volume * this.duck;
     s.connect(f).connect(g).connect(ac.destination); s.start(t);
   },
   play(n) {
     if (this.muted) return;
-    if (this.files[n]) { const a = this.files[n].cloneNode(); a.volume = this.volume; a.play().catch(() => {}); return; }
+    if (this.files[n]) { const a = this.files[n].cloneNode(); a.volume = this.volume * this.duck; a.play().catch(() => {}); return; }
     switch (n) {
       case 'buy': this.tone(520, .08); this.tone(780, .1, 'square', .15, 0, .07); break;
       case 'sell': this.tone(700, .07, 'triangle'); this.tone(1050, .12, 'triangle', .15, 0, .06); this.tone(1400, .15, 'triangle', .1, 0, .12); break;
@@ -77,7 +77,7 @@ const Audio2 = {
     if (this.music) { this.music.pause(); this.music = null; }
     this.probe('assets/music/' + name, a => {
       if (this.musicName !== name) return;
-      a.loop = true; a.volume = this.volume * 0.5; this.music = a;
+      a.loop = true; a.volume = this.volume * 0.5 * this.duck; this.music = a;
       this.tryPlayMusic();
     });
   },
@@ -85,8 +85,8 @@ const Audio2 = {
     this.level = Math.max(0, Math.min(100, Math.round(l)));
     this.volume = 0.6 * this.level / 100;
     this.muted = this.level === 0;
-    if (this.music) { this.music.volume = this.volume * 0.5; if (this.muted) this.music.pause(); else if (this.music.paused) this.tryPlayMusic(); }
-    if (this.active) this.active.forEach(a => { a.volume = this.volume; });
+    if (this.music) { this.music.volume = this.volume * 0.5 * this.duck; if (this.muted) this.music.pause(); else if (this.music.paused) this.tryPlayMusic(); }
+    if (this.active) this.active.forEach(a => { a.volume = this.volume * this.duck; });
     if (this.muted && this.stopSfx) this.stopSfx();
   },
   setLevel(l) {
@@ -118,7 +118,7 @@ Object.assign(Audio2, {
     this.songPath = path; this.musicName = null;
     if (this.music) { this.music.pause(); this.music = null; }
     const a = new Audio(encodePath(path));
-    a.loop = loop; a.volume = this.volume * 0.5; this.music = a;
+    a.loop = loop; a.volume = this.volume * 0.5 * this.duck; this.music = a;
     this.tryPlayMusic();
   },
   // browsers refuse to play sound before the first tap/click on the page.
@@ -148,7 +148,7 @@ Object.assign(Audio2, {
     if (this.muted || !path) return null;
     if (!force && this.exclusive) return null;
     const a = new Audio(encodePath(path));
-    a.volume = this.volume;
+    a.volume = this.volume * this.duck;
     this.active.add(a);
     const done = () => { this.active.delete(a); if (this.exclusive === a) this.exclusive = null; };
     a.addEventListener('ended', done); a.addEventListener('error', done);
@@ -162,6 +162,19 @@ Object.assign(Audio2, {
       const check = () => { if (!this.active.size || Date.now() - t0 > maxMs) res(); else setTimeout(check, 100); };
       check();
     });
+  },
+  // cutscene ducking: everything else fades to `to` (1 = normal, 0.15 = 85% quieter) over `ms`
+  setDuck(to, ms) {
+    clearInterval(this.duckT);
+    const from = this.duck, t0 = Date.now();
+    const step = () => {
+      const k = ms <= 0 ? 1 : Math.min(1, (Date.now() - t0) / ms);
+      this.duck = from + (to - from) * k;
+      if (this.music) this.music.volume = this.volume * 0.5 * this.duck;
+      this.active.forEach(a => { a.volume = this.volume * this.duck; });
+      if (k >= 1) clearInterval(this.duckT);
+    };
+    step(); if (ms > 0) this.duckT = setInterval(step, 30);
   },
   stopSfx() { this.active.forEach(a => a.pause()); this.active.clear(); this.exclusive = null; },
 });

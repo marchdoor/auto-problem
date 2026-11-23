@@ -587,12 +587,26 @@ async function playBattle(frames, opts = {}) {
   let prev = null;
   const plan = planDeathSounds(frames, opts);
   const replaceSynth = MANIFEST.death.length > 0 || !!opts.sudden;
+  // john tanner vs the vodafone ceo: a cutscene when they meet front to front
+  let cut = null; try { cut = skipping ? null : CUT.plan(frames); } catch (e) { console.error(e); }
   for (let i = 0; i < frames.length; i++) {
     const f = frames[i];
-    if (skipping) { prev = f; continue; }
-    try { await playFrame(f, prev, i, plan[i], replaceSynth); } catch (e) { console.error('battle frame', i, e); }
+    if (skipping) { if (CUT.active) CUT.close(true); prev = f; continue; }
+    let hold, closeCut = false;
+    if (cut && i === cut.k) {
+      // the video plays while they stand face to face. The frames up to the death are stretched,
+      // so the loser dies right as the video ends.
+      const total = CUTSCENES[cut.key].dur * 1000, n = cut.d - cut.k;
+      if (CUT.open(cut.key)) {
+        if (n === 0) await CUT.wait(Math.max(0, total - 470));
+        else cut.hold = Math.max(350, (total - 300 - 170 * n) / n);
+      } else cut = null;
+    }
+    if (cut && CUT.active) { if (i >= cut.k && i < cut.d && cut.hold) hold = cut.hold; if (i === cut.d) closeCut = true; }
+    try { await playFrame(f, prev, i, plan[i], replaceSynth, hold, closeCut); } catch (e) { console.error('battle frame', i, e); }
     prev = f;
   }
+  if (CUT.active) CUT.close(true);
   if (prev) { try { renderBattleTeams(prev); } catch (e) { console.error(e); } }
   try { ACH.frames(frames); } catch (e) { console.error(e); }
   await sleep(500);
@@ -610,7 +624,7 @@ async function playResultTheme(result, sudden) {
   else Audio2.play(result === 'win' ? 'win' : result === 'lose' ? 'lose' : 'click');
 }
 
-async function playFrame(f, prev, i, deathSounds, replaceSynthFaint) {
+async function playFrame(f, prev, i, deathSounds, replaceSynthFaint, hold, closeCut) {
   {
     // faint animation on the previous render
     const dying = f.fx.filter(x => x.type === 'faint').map(x => x.uid);
@@ -640,10 +654,11 @@ async function playFrame(f, prev, i, deathSounds, replaceSynthFaint) {
     }
     (f.sfx || []).filter(x => !(replaceSynthFaint && x === 'faint')).forEach((s, k) => setTimeout(() => Audio2.play(s), k * 60));
     if (deathSounds) playDeathSounds(deathSounds);
+    if (closeCut) CUT.close();
     f.fx.filter(x => x.type === 'ban').forEach(x => { const el = document.querySelector(`#battle .card[data-uid="${x.uid}"]`); if (el) el.classList.add('banned'); });
     if ((f.sfx || []).includes('nuke')) { const fl = document.createElement('div'); fl.className = 'flash'; $('#app').appendChild(fl); setTimeout(() => fl.remove(), 600); }
     if (f.cap) showCaption(f.cap);
-    await sleep(i === 0 ? 1100 : 720);
+    if (hold) await CUT.wait(hold); else await sleep(i === 0 ? 1100 : 720);
   }
 }
 
