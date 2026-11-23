@@ -615,3 +615,25 @@ body.endless .wins-max { display: none; }
 .ach-watch { background: #1b1b1b; color: #fff; border: 2px solid var(--tc); padding: 6px 10px; font: 900 13px 'Arial Black'; cursor: pointer; }
 .ach-watch:hover { background: var(--tc); color: #000; }
 @media (max-width: 760px), (pointer: coarse) and (max-aspect-ratio: 1/1) { .pip:not(.big) { right: auto; left: 11vw; bottom: auto; top: 64px; width: 78vw; } }
+
+/* ---------------- dev mode ---------------- */
+#dev-btn { position: absolute; left: 0; top: 46%; z-index: 60; padding: 6px 5px; background: #6d1b1b; color: #fff; border: 2px solid #ff5252; border-left: 0; font: 900 11px 'Arial Black'; writing-mode: vertical-rl; letter-spacing: .1em; cursor: pointer; opacity: .8; }
+#dev-btn:hover { opacity: 1; }
+#dev-btn.hidden { display: none; }
+#app:has(#battle.active) #dev-btn { display: none; }
+#dev-flash { position: absolute; top: 14px; left: 50%; transform: translate(-50%, -150%); z-index: 95; background: #0d0d0d; border: 2px solid #ff5252; padding: 8px 16px; font: 900 15px 'Arial Black'; transition: transform .3s; pointer-events: none; }
+#dev-flash.show { transform: translate(-50%, 0); }
+.dev-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.dev-tabs button.on { background: #ff5252; color: #000; }
+.modal-box h3 { font: 900 16px 'Arial Black'; margin: 16px 0 6px; color: var(--accent); }
+.dev-row { display: flex; gap: 10px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); margin-bottom: 4px; }
+.dev-slot { width: 90px; font-size: 12px; color: var(--muted); flex: none; }
+.dev-desc { flex: 1; font-size: 14px; }
+.dev-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+.dev-form input[type=number], .dev-grid input { width: 70px; background: #151515; color: #fff; border: 1px solid #555; padding: 5px; }
+.dev-form .dv-search { width: 170px; background: #151515; color: #fff; border: 1px solid #555; padding: 5px; }
+.dev-form select { background: #151515; color: #fff; border: 1px solid #555; padding: 5px; max-width: 260px; }
+.dev-form label, .dev-grid label { font-size: 13px; color: #ddd; display: flex; align-items: center; gap: 4px; }
+.dev-grid { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
+.dev-check { display: flex; gap: 8px; align-items: center; margin: 6px 0; font-size: 14px; }
+@media (max-width: 760px) { .dev-form .dv-search { width: 100%; } .dev-form select { max-width: 100%; } }

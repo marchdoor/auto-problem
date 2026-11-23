@@ -295,6 +295,7 @@ function slotClick(i) {
 
 // ---------------- rendering ----------------
 function showScreen(id) {
+  if (typeof DEV !== 'undefined') setTimeout(() => DEV.refresh(), 0);
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
 }
 function setColour() {
@@ -468,7 +469,7 @@ async function endTurn(forced) {
   if (S.net) { NET.submitTeam(); return; }
 
   const isBoss = !!S.boss;
-  const opp = isBoss ? { name: 'nike inc. · the final wave', team: buildBossTeam() } : pickOpponent();
+  const opp = (typeof DEV !== 'undefined' && DEV.opponent()) || (isBoss ? { name: 'nike inc. · the final wave', team: buildBossTeam() } : pickOpponent());
   lastGhost = /^ghost/.test(opp.name);
   const seed = Math.floor(Math.random() * 1e9);
   const res = simulateBattle(S.team, opp.team, seed);

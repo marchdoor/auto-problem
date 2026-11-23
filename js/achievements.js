@@ -88,10 +88,11 @@ const ACH = {
   },
   save() { try { localStorage.setItem('np_ach', JSON.stringify(this.data)); } catch (e) {} },
   get: id => ACH_LIST.find(a => a.id === id),
+  blocked() { return typeof DEV !== 'undefined' && DEV.on && !DEV.ach; },
   has(id) { return !!this.load().done[id]; },
   count() { const d = this.load(); return ACH_LIST.filter(a => d.done[a.id]).length; },
 
-  unlock(id, silent) {
+  unlock(id, silent) { if (this.blocked()) return;
     const a = this.get(id), d = this.load();
     if (!a || d.done[id]) return;
     d.done[id] = Date.now(); this.save();
@@ -116,11 +117,11 @@ const ACH = {
   },
 
   // ---- hooks the game calls ----
-  heard(path) { // a death sound or a song started playing
+  heard(path) { if (this.blocked()) return; // a death sound or a song started playing
     const a = ACH_LIST.find(x => x.sound === path);
     if (a) this.unlock(a.id);
   },
-  theme(path) { // a win / lose song started
+  theme(path) { if (this.blocked()) return; // a win / lose song started
     if (!path) return;
     if (path.endsWith('/negev.mp3')) return this.unlock('negev');
     const kind = (MANIFEST.win || []).includes(path) ? 'win' : (MANIFEST.lose || []).includes(path) ? 'lose' : null;
@@ -129,15 +130,15 @@ const ACH = {
     if (!d.themes.includes(path)) { d.themes.push(path); this.save(); }
     this.unlock('themes_' + kind);
   },
-  level(L) { if (L >= 3) this.unlock('level3'); if (L >= 10) this.unlock('beyond'); },
-  item(id) {
+  level(L) { if (this.blocked()) return; if (L >= 3) this.unlock('level3'); if (L >= 10) this.unlock('beyond'); },
+  item(id) { if (this.blocked()) return;
     const d = this.load();
     if (!d.items.includes(id)) { d.items.push(id); this.save(); }
     if (ITEMS[id] && ITEMS[id].kill) this.unlock('overdose');
     if (Object.keys(ITEMS).every(k => d.items.includes(k))) this.unlock('soldout');
   },
   // o: { wins, lives, startLives, endless, boss, rebuild, ghost, net }
-  afterBattle(result, o) {
+  afterBattle(result, o) { if (this.blocked()) return;
     if (result !== 'win') return;
     this.unlock('firstblood');
     if (o.lives === 1) this.unlock('lastlife');
@@ -146,7 +147,7 @@ const ACH = {
     if (o.wins >= 10) { this.unlock('tenwins'); if (!o.net && o.lives >= o.startLives) this.unlock('flawless'); }
     if (o.boss) { this.unlock('nikeslayer'); if (o.rebuild) this.unlock('rebuilt'); }
   },
-  frames(frames) { // things you can only see in the battle itself
+  frames(frames) { if (this.blocked()) return; // things you can only see in the battle itself
     const d = this.load();
     const re = [[/720 hour ban/, 0], [/rl number swapped/, 1], [/ghost joins the cemetery/, 2], [/the monitor explodes/, 3], [/^turn on monitor$/, 4], [/cemetery fc rage quits/, 5]];
     let full = false, nuked = false, chaosNew = false;
