@@ -55,7 +55,14 @@ function shopTrigger(u, ev, ...a) { const h = UNITS[u.id].on[ev]; if (h) { buffS
 
 // ---------------- run lifecycle ----------------
 // one song per shop phase and per battle phase; no repeats within a run / online game
+// A win/lose theme waits for the death sounds to finish. If the next phase's music
+// has started in the meantime (you pressed continue early), the waiting theme is
+// cancelled so it can't overwrite the new song (e.g. the sudden death song).
+let themeToken = 0;
+function cancelTheme() { themeToken++; }
+
 function phaseSong(kind) {
+  cancelTheme();
   if (S && S.net) { if (NET.songs && NET.songs[kind]) Audio2.playSong(NET.songs[kind]); return; }
   if (!S) return;
   if (!S.playlist || !S.playlist.list || !S.playlist.list.length) S.playlist = newPlaylist();
@@ -477,9 +484,11 @@ async function playBattle(frames, opts = {}) {
 
 // after the battle: wait for every death sound, then the win or lose theme
 async function playResultTheme(result, sudden) {
+  const tok = ++themeToken;
   Audio2.stopMusic();
   if (sudden) return; // sudden death: only the last-death sound, no theme
   await Audio2.sfxDone();
+  if (tok !== themeToken) return; // the next round's music already started
   const list = result === 'win' ? MANIFEST.win : result === 'lose' ? MANIFEST.lose : [];
   if (list.length) Audio2.playSong(pick(list), false);
   else Audio2.play(result === 'win' ? 'win' : result === 'lose' ? 'lose' : 'click');
@@ -629,6 +638,7 @@ function menu() {
 
 // ---------------- title ----------------
 function toTitle() {
+  cancelTheme();
   showScreen('title');
   document.documentElement.style.setProperty('--gray', '1');
   $('#btn-continue').classList.toggle('hidden', !store.get('np_run', null));
