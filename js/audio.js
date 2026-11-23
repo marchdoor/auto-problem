@@ -5,7 +5,7 @@
 const SFX_NAMES = ['buy', 'sell', 'roll', 'merge', 'levelup', 'hit', 'faint', 'nuke', 'start', 'win', 'lose', 'giuseppe', 'freeze', 'click', 'item'];
 
 const Audio2 = {
-  ctx: null, files: {}, duck: 1, muted: false, volume: 0.6, level: 100, prevLevel: 100, music: null, musicName: null,
+  ctx: null, files: {}, duck: 1, mus: 1, muted: false, volume: 0.6, level: 100, prevLevel: 100, music: null, musicName: null,
   // volume is a level from 0 to 100 (saved). internal gain = 0.6 * level / 100
   init() {
     let l = 100;
@@ -73,11 +73,11 @@ const Audio2 = {
   playMusic(name) {
     if (this.musicName === name) return;
     this.songPath = null;
-    this.musicName = name;
+    this.musicName = name; this.mus = 1; clearInterval(this.musT);
     if (this.music) { this.music.pause(); this.music = null; }
     this.probe('assets/music/' + name, a => {
       if (this.musicName !== name) return;
-      a.loop = true; a.volume = this.volume * 0.5 * this.duck; this.music = a;
+      a.loop = true; a.volume = this.volume * 0.5 * this.duck * this.mus; this.music = a;
       this.tryPlayMusic();
     });
   },
@@ -85,7 +85,7 @@ const Audio2 = {
     this.level = Math.max(0, Math.min(100, Math.round(l)));
     this.volume = 0.6 * this.level / 100;
     this.muted = this.level === 0;
-    if (this.music) { this.music.volume = this.volume * 0.5 * this.duck; if (this.muted) this.music.pause(); else if (this.music.paused) this.tryPlayMusic(); }
+    if (this.music) { this.music.volume = this.volume * 0.5 * this.duck * this.mus; if (this.muted) this.music.pause(); else if (this.music.paused) this.tryPlayMusic(); }
     if (this.active) this.active.forEach(a => { a.volume = this.volume * this.duck; });
     if (this.muted && this.stopSfx) this.stopSfx();
   },
@@ -115,10 +115,10 @@ Object.assign(Audio2, {
   active: new Set(), exclusiveUntil: 0, songPath: null,
   playSong(path, loop = true) {
     if (!path || this.songPath === path) return;
-    this.songPath = path; this.musicName = null; this.songT0 = Date.now();
+    this.mus = 1; clearInterval(this.musT); this.songPath = path; this.musicName = null; this.songT0 = Date.now();
     if (this.music) { this.music.pause(); this.music = null; }
     const a = new Audio(encodePath(path));
-    a.loop = loop; a.volume = this.volume * 0.5 * this.duck; this.music = a;
+    a.loop = loop; a.volume = this.volume * 0.5 * this.duck * this.mus; this.music = a;
     this.tryPlayMusic();
   },
   // browsers refuse to play sound before the first tap/click on the page.
@@ -177,11 +177,23 @@ Object.assign(Audio2, {
     const step = () => {
       const k = ms <= 0 ? 1 : Math.min(1, (Date.now() - t0) / ms);
       this.duck = from + (to - from) * k;
-      if (this.music) this.music.volume = this.volume * 0.5 * this.duck;
+      if (this.music) this.music.volume = this.volume * 0.5 * this.duck * this.mus;
       this.active.forEach(a => { a.volume = this.volume * this.duck; });
       if (k >= 1) clearInterval(this.duckT);
     };
     step(); if (ms > 0) this.duckT = setInterval(step, 30);
+  },
+  // the music alone fades to `to` (0 = silent) over `ms`, for special sounds that need the stage to themselves
+  fadeMusic(to, ms) {
+    clearInterval(this.musT);
+    const from = this.mus, t0 = Date.now();
+    const step = () => {
+      const k = ms > 0 ? Math.min(1, (Date.now() - t0) / ms) : 1;
+      this.mus = from + (to - from) * k;
+      if (this.music) this.music.volume = this.volume * 0.5 * this.duck * this.mus;
+      if (k >= 1) clearInterval(this.musT);
+    };
+    step(); if (ms > 0) this.musT = setInterval(step, 30);
   },
   stopSfx() { this.active.forEach(a => a.pause()); this.active.clear(); this.exclusive = null; },
 });

@@ -60,7 +60,7 @@ const CUT = {
     }
     // 2. giuseppe 1, 2 or 4 kills gavin collins or the vodafone ceo, with both of them on that team
     // 3. bondo 2, bondo 2 prime or cigga nover kills giuseppe 1
-    // 4. no problem or yes problem gets their 3rd kill: the video starts when they start attacking
+    // 4. no problem or yes problem gets 3 or more kills: the video starts when they start attacking and ends at their last kill
     const killCount = {};
     for (let d = 0; d < frames.length; d++) {
       for (const x of frames[d].fx) {
@@ -71,8 +71,11 @@ const CUT = {
         if (['bondo2', 'bondo2prime', 'ciggan'].includes(x.killerId) && victim === 'giuseppe')
           add({ k: attackFrame(x.killerUid, d), d, key: 'bondokill' });
         if (['noproblem', 'yesproblem'].includes(x.killerId)) {
-          killCount[x.killerUid] = (killCount[x.killerUid] || 0) + 1;
-          if (killCount[x.killerUid] === 3) add({ k: firstAttack(x.killerUid, d), d, key: 'noyes3' });
+          const kc = (killCount[x.killerUid] = (killCount[x.killerUid] || 0) + 1);
+          if (kc >= 3) {   // 3, 4, 5... kills: the video runs until the last of them
+            const ex = out.find(o => o.key === 'noyes3' && o.uid === x.killerUid);
+            if (ex) ex.d = d; else add({ k: firstAttack(x.killerUid, d), d, key: 'noyes3', uid: x.killerUid });
+          }
         }
       }
     }

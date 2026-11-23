@@ -575,7 +575,7 @@ function planDeathSounds(frames, opts) {
   for (const d of deaths) {
     if (d.killerId !== 'noproblem') continue;
     kills[d.killerUid] = (kills[d.killerUid] || 0) + 1;
-    if (kills[d.killerUid] === 2) { plan[d.i] = [{ path: SPECIAL.noproblem, exclusive: true }]; break; }
+    if (kills[d.killerUid] === 2) { plan[d.i] = [{ path: SPECIAL.noproblem, exclusive: true, muteMusic: true }]; break; }
   }
   return plan;
 }
@@ -586,7 +586,12 @@ function playDeathSounds(list) {
     ACH.heard(x.path);
     if (x.stopMusic) Audio2.stopMusic();
     if (x.video && CUT.lastDeath()) continue;   // the last death video has its own sound
-    if (x.exclusive) { Audio2.stopSfx(); Audio2.playFile(x.path, { exclusive: true, force: true }); }
+    if (x.exclusive) { Audio2.stopSfx(); const a = Audio2.playFile(x.path, { exclusive: true, force: true });
+      if (x.muteMusic) {   // the music goes silent while it plays, then fades back in
+        Audio2.fadeMusic(0, 150);
+        if (a) { const back = () => Audio2.fadeMusic(1, 1500); a.addEventListener('ended', back, { once: true }); a.addEventListener('error', back, { once: true }); a.addEventListener('pause', back, { once: true }); }
+        else Audio2.fadeMusic(1, 1500);
+      } }
     else Audio2.playFile(x.path);
   }
 }
