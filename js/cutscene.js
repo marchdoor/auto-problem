@@ -15,6 +15,13 @@ CUTSCENES.suddenlast = { src: 'assets/cutscenes/suddendeathlastdeathsfxVIDEO.mp4
 CUTSCENES.giuseppekill = { src: 'assets/cutscenes/giuseppe124killsvodafoneceoorgavincollins.mp4', dur: 5.5, ach: 'cut_giuseppe', title: 'giuseppe vs the rat' };
 CUTSCENES.noyes3 = { src: 'assets/cutscenes/noyesproblem3killsplus.mp4', dur: 24.6, ach: 'cut_noyes', title: 'no problem / yes problem' };
 CUTSCENES.bondokill = { src: 'assets/cutscenes/bondo2killsgiuseppe1.mp4', dur: 7.3, ach: 'cut_bondo', title: 'bondo vs giuseppe' };
+CUTSCENES.funnydraw = { src: 'assets/cutscenes/funnyheimerkillseveryone2plus.mp4', dur: 8.8, ach: 'cut_funny', title: 'free sacrifice' };
+CUTSCENES.crososdies = { src: 'assets/cutscenes/crososdiestoanygiuseppe.mp4', dur: 6.2, ach: 'cut_crosos', title: 'crosos vs giuseppe' };
+CUTSCENES.rebookboom = { src: 'assets/cutscenes/rebookexplosiondeaths.mp4', dur: 9.65, ach: 'cut_rebook', title: 'rebook explosion' };
+CUTSCENES.g44venom = { src: 'assets/cutscenes/giuseppe44killsbarbievenom.mp4', dur: 6.7, ach: 'cut_g44', title: 'giuseppe 44 vs barbie venom' };
+CUTSCENES.clone84 = { src: 'assets/cutscenes/giuseppeclonen84killedbyjannertohn.mp4', dur: 5.7, ach: 'cut_clone84', title: 'giuseppe n.84' };
+CUTSCENES.johnjannerebook = { src: 'assets/cutscenes/johnjannerebook.mp4', dur: 6.18, ach: 'cut_johnjanner', title: 'john, janner and the rebook' };
+CUTSCENES.noprobjohn = { src: 'assets/cutscenes/noproblemkillsjohntanner.mp4', dur: 10.2, ach: 'cut_noprobjohn', title: 'no problem vs john tanner' };
 const DUCK_LEVEL = 0.15;   // other sounds keep 15% (85% quieter) while the video plays
 
 const CUT = {
@@ -29,8 +36,8 @@ const CUT = {
   // The battle is stretched between them so the video ends right as that death happens.
   plan(frames) {
     const out = [];
-    const idOf = {};
-    frames.forEach(f => f.A.concat(f.B).forEach(u => { idOf[u.uid] = u.id; }));
+    const idOf = {}, nameOf = {};
+    frames.forEach(f => f.A.concat(f.B).forEach(u => { idOf[u.uid] = u.id; nameOf[u.uid] = u.name; }));
     const attackFrame = (uid, d) => { for (let j = d; j >= 0; j--) if (frames[j].fx.some(x => x.type === 'attack' && x.uid === uid)) return j; return d; };
     const firstAttack = (uid, d) => { for (let j = 0; j <= d; j++) if (frames[j].fx.some(x => x.type === 'attack' && x.uid === uid)) return j; return d; };
     const rosterHas = (side, ids, d) => ids.every(id => { for (let j = 0; j <= d; j++) if ((side === 'A' ? frames[j].A : frames[j].B).some(u => u.id === id)) return true; return false; });
@@ -69,10 +76,59 @@ const CUT = {
         }
       }
     }
-    // one video at a time: earliest first, and skip any that would overlap
-    out.sort((a, b) => a.k - b.k);
-    const res = []; let until = -1;
-    for (const c of out) if (c.k > until) { res.push(c); until = c.d; }
+    const isG = id => !!(UNITS[id] && /giuseppe/i.test(UNITS[id].name));
+    const last = frames[frames.length - 1];
+    const draw = !!last && !last.A.some(u => !u.dead) && !last.B.some(u => !u.dead);
+    let lastFaint = -1; frames.forEach((f, j) => { if (f.fx.some(x => x.type === 'faint')) lastFaint = j; });
+    const funny = {};   // dr. funnyheimer: his kills and where he fell
+    for (let d = 0; d < frames.length; d++) {
+      for (const x of frames[d].fx) {
+        if (x.type !== 'faint') continue;
+        const victim = idOf[x.uid];
+        // 5. sgt. crosos dies to any giuseppe (clones too)
+        if (victim === 'crosos' && x.killerId && isG(x.killerId)) add({ k: attackFrame(x.killerUid, d), d, key: 'crososdies' });
+        // 6. giuseppe n.44 kills barbie venom
+        if (victim === 'venom' && x.killerId === 'g44') add({ k: attackFrame(x.killerUid, d), d, key: 'g44venom' });
+        // 7. janner tohn kills giuseppe n.84 (a numbered clone)
+        if (x.killerId === 'janner' && nameOf[x.uid] === 'giuseppe n.84') add({ k: attackFrame(x.killerUid, d), d, key: 'clone84', pri: 3 });
+        // 8. no problem kills john tanner: the video starts the turn before
+        if (victim === 'john' && x.killerId === 'noproblem') {
+          const a = attackFrame(x.killerUid, d);
+          let k = a; for (let j = a - 1; j >= 0; j--) if (frames[j].fx.some(y => y.type === 'attack')) { k = j; break; }
+          add({ k, d, key: 'noprobjohn' });
+        }
+        if (victim === 'funny') (funny[x.uid] = funny[x.uid] || { kills: 0, lastKill: -1 }).fell = d;
+        if (x.killerId === 'funny') { const e = (funny[x.killerUid] = funny[x.killerUid] || { kills: 0, lastKill: -1 }); e.kills++; e.lastKill = d; }
+      }
+    }
+    // 9. dr. funnyheimer nukes at least 2 others (and falls himself) and the battle ends in a draw
+    for (const uid in funny) {
+      const e = funny[uid];
+      if (draw && e.fell != null && e.kills >= 2 && e.lastKill === lastFaint)
+        add({ k: Math.min(e.fell, attackFrame(+uid, e.fell)), d: lastFaint, key: 'funnydraw', pri: 2 });
+    }
+    // rebook bombs: one that kills somebody gets a video that ends at the explosion. If john tanner and
+    // janner tohn are on the bomber's team, that video plays right after it explodes instead.
+    frames.forEach((f, b) => f.fx.forEach(x => {
+      if (x.type !== 'bomb') return;
+      const mine = f[x.ownerSide] || [];
+      const both = ['john', 'janner'].every(id => mine.some(u => u.id === id && !u.dead));
+      if (both && !this.played('johnjannerebook')) { add({ k: b, d: b, key: 'johnjannerebook', after: true, pri: 3 }); return; }
+      let d = -1;
+      for (let j = b; j < frames.length; j++) {
+        if (j > b && frames[j].fx.some(y => y.type === 'attack')) break;
+        if (frames[j].fx.some(y => y.type === 'faint' && y.killerUid === x.owner)) { d = j; break; }
+      }
+      if (d < 0) return;
+      let plant = 0; for (let j = 0; j <= b; j++) if (frames[j].fx.some(y => y.type === 'plant' && y.owner === x.owner)) { plant = j; break; }
+      add({ k: Math.max(plant, d - 14), d, key: 'rebookboom' });
+    }));
+
+    // one video at a time: rarer ones first (then earliest first), and skip any that would overlap
+    out.sort((a, b) => (b.pri || 0) - (a.pri || 0) || a.k - b.k);
+    const res = [];
+    for (const c of out) if (!res.some(r => !(c.d < r.k || c.k > r.d))) res.push(c);
+    res.sort((a, b) => a.k - b.k);
     return res;
   },
 

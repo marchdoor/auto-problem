@@ -250,7 +250,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     if (u.item === 'hopeless') scramble(c.other(u.side), u);
     if (u.item === 'nuke') {            // rebook nuke: a bomb on a random enemy, boom after 3 turns
       const e = c.randomEnemy(u.side);
-      if (e) { const dmg = 6 + 4 * u.lvl; bombs.push({ target: e, targetSide: e.side, left: 3, owner: u, dmg, splash: Math.max(1, Math.floor(dmg / 3)) }); c.fx(e, 'ability'); pendingCap = `${u.name} plants a rebook nuke on ${e.name}`; }
+      if (e) { const dmg = 6 + 4 * u.lvl; bombs.push({ target: e, targetSide: e.side, left: 3, owner: u, dmg, splash: Math.max(1, Math.floor(dmg / 3)) }); c.fx(e, 'ability'); pendingFx.push({ uid: e.uid, type: 'plant', owner: u.uid }); pendingCap = `${u.name} plants a rebook nuke on ${e.name}`; }
     }
     if (pendingFx.length) snap();
     settle();
@@ -264,6 +264,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     if (!t) return;
     const alive = T[t.side].filter(u => !u.dead), ai = alive.indexOf(t);
     pendingCap = `rebook nuke blows up on ${t.name}`; pendingSfx.push('nuke');
+    pendingFx.push({ uid: t.uid, type: 'bomb', owner: bm.owner.uid, ownerSide: bm.owner.side });
     c.damage(t, bm.dmg, bm.owner, 'bomb');
     [alive[ai - 1], alive[ai + 1]].filter(Boolean).forEach(n => c.damage(n, bm.splash, bm.owner, 'bomb'));
   };

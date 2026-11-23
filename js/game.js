@@ -617,7 +617,7 @@ async function playBattle(frames, opts = {}) {
     if (skipping) { if (CUT.active && !CUT.sd && !CUT.lastOn) CUT.close(true); prev = f; continue; }
     let hold, closeCut = false;
     if (syncEnd) hold = wSum[i] > 0 ? Math.max(40, (syncEnd - Date.now() - fSum[i]) * w[i] / wSum[i]) : 0;
-    const starting = cuts.find(c => c.k === i);
+    const starting = cuts.find(c => c.k === i && !c.after);
     if (starting && !syncEnd) {
       // the video plays and the frames up to the death are stretched, so it ends right as that death happens
       cut = starting;
@@ -631,6 +631,13 @@ async function playBattle(frames, opts = {}) {
     if (cut && CUT.active && !syncEnd) { if (i >= cut.k && i < cut.d && cut.hold) hold = cut.hold; if (i === cut.d) closeCut = true; }
     try { await playFrame(f, prev, i, plan[i], replaceSynth, hold, closeCut); } catch (e) { console.error('battle frame', i, e); }
     if (cut && i >= cut.d) cut = null;
+    // a video that plays right after something happens (the bomb has just gone off)
+    const late = !syncEnd && !skipping && cuts.find(c => c.after && c.k === i);
+    if (late && CUT.open(late.key)) {
+      CUT.markSeen(late.key);
+      await CUT.wait(Math.max(0, CUTSCENES[late.key].dur * 1000 - 150));
+      CUT.close(skipping);
+    }
     prev = f;
   }
   if (syncEnd) speed = savedSpeed;
