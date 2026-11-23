@@ -442,27 +442,30 @@ html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparen
 
 /* ============================================================
    PHONE BOTTOM MARGIN: phone browsers can hide the bottom of the page
-   behind their toolbar, so every screen gets 200px of space at the
+   behind their toolbar, so every screen gets 5% of the screen height at the
    bottom and scrolls when the content is taller than the screen.
    ============================================================ */
 @media (max-width: 760px) {
-  .screen { padding-bottom: 200px; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+  .screen { padding-bottom: var(--bottom-pad); overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
   .screen > * { flex-shrink: 0; }
   .screen .hud { position: sticky; top: 0; z-index: 8; }
   .board { flex: none; overflow: visible; }
   .arena { flex: none; min-height: 0; }
   #title { justify-content: flex-start; }
   .title-box { margin-top: auto; margin-bottom: auto; }
-  .overlay { padding: 12px 0 200px; box-sizing: border-box; }
+  .overlay { padding: 12px 0 var(--bottom-pad); box-sizing: border-box; }
   .modal-box { max-height: 100%; }
   .result-box { max-height: 100%; overflow-y: auto; }
   .toast { bottom: auto; top: 120px; }
 }
 /* phones held sideways have much less height: smaller margin, same scrolling */
 @media (max-height: 520px) and (min-width: 561px) {
-  .screen { padding-bottom: 60px; overflow-y: auto; overflow-x: hidden; }
+  .screen { padding-bottom: var(--bottom-pad); overflow-y: auto; overflow-x: hidden; }
   .screen > * { flex-shrink: 0; }
   .screen .hud { position: sticky; top: 0; z-index: 8; }
-  .overlay { padding: 8px 0 60px; box-sizing: border-box; }
+  .overlay { padding: 8px 0 var(--bottom-pad); box-sizing: border-box; }
   .modal-box, .result-box { max-height: 100%; overflow-y: auto; }
 }
+
+/* one place to tune the phone bottom margin: 5% of the visible screen height */
+:root { --bottom-pad: calc(var(--app-h, 100vh) * 0.05); }
