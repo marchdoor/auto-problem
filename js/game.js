@@ -466,7 +466,9 @@ function setBattleBg(seed) {
 
 function renderBattleTeams(f) {
   // clones can push a side past 5 units: size the cards for however many there are
-  $('#battle').style.setProperty('--n', Math.max(5, f.A.length, f.B.length));
+  // (units that just died are still drawn for a moment, so count only the living for the size)
+  const alive = t => t.filter(u => !u.dead).length;
+  $('#battle').style.setProperty('--n', Math.min(MAX_FIELD, Math.max(5, alive(f.A), alive(f.B))));
   const draw = (el, team, side) => {
     el.innerHTML = '';
     team.forEach(u => { const c = cardEl(u); c.dataset.side = side; el.appendChild(c); });
