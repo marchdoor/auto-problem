@@ -4,6 +4,15 @@
 //  seeds and standings; every PC replays the same battle from the seed.
 // ============================================================
 const NET_PREFIX = 'npap-v1-';
+// STUN finds your public address; TURN (js/turn.js) relays for strict networks
+function peerOptions() {
+  let extra = []; try { extra = JSON.parse(localStorage.getItem('np_turn') || '[]'); } catch (e) {}
+  return { config: { iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:global.stun.twilio.com:3478' }, { urls: 'stun:stun.nextcloud.com:3478' },
+    ...TURN_SERVERS, ...extra,
+  ], iceCandidatePoolSize: 4 } };
+}
 const TURN_SECONDS = 90;
 const MAX_PLAYERS = 8;
 const NET_LIVES = 5;
@@ -18,7 +27,7 @@ const NET = {
   host(name) {
     this.reset(); this.isHost = true; this.myName = name;
     this.code = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random() * 24)]).join('');
-    this.peer = new Peer(NET_PREFIX + this.code);
+    this.peer = new Peer(NET_PREFIX + this.code, peerOptions());
     this.peer.on('open', id => {
       this.myId = id; this.active = true;
       this.addPlayer(id, name, CHAT.profileFor(name));
@@ -29,12 +38,12 @@ const NET = {
   },
   join(name, code) {
     this.reset(); this.myName = name; this.code = code.toUpperCase().trim();
-    this.peer = new Peer();
+    this.peer = new Peer(undefined, peerOptions());
     this.peer.on('open', id => {
       this.myId = id;
       const conn = this.peer.connect(NET_PREFIX + this.code, { reliable: true });
       this.conn = conn;
-      const t = setTimeout(() => this.fail('could not reach room ' + this.code + '. check the code'), 12000);
+      const t = setTimeout(() => this.fail('could not reach room ' + this.code + '. if the code is right, your two networks cannot connect directly (mobile data, school / work wifi and some routers block it). try another network or a hotspot, or the host can set up a relay server (see js/turn.js)'), 25000);
       conn.on('open', () => { clearTimeout(t); this.active = true; conn.send({ t: 'hello', name, prof: CHAT.profileFor(name) }); });
       conn.on('data', m => this.onMessage(m));
       conn.on('close', () => { if (this.active) this.fail('the host left. and you cry'); });
