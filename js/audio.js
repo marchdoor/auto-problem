@@ -75,13 +75,13 @@ const Audio2 = {
     this.probe('assets/music/' + name, a => {
       if (this.musicName !== name) return;
       a.loop = true; a.volume = this.volume * 0.5; this.music = a;
-      if (!this.muted) a.play().catch(() => {});
+      this.tryPlayMusic();
     });
   },
   toggleMute() {
     this.muted = !this.muted;
     try { localStorage.setItem('np_muted', this.muted ? '1' : '0'); } catch (e) {}
-    if (this.music) { if (this.muted) this.music.pause(); else this.music.play().catch(() => {}); }
+    if (this.music) { if (this.muted) this.music.pause(); else this.tryPlayMusic(); }
     if (this.muted && this.stopSfx) this.stopSfx();
     return this.muted;
   }
@@ -106,7 +106,28 @@ Object.assign(Audio2, {
     if (this.music) { this.music.pause(); this.music = null; }
     const a = new Audio(encodePath(path));
     a.loop = loop; a.volume = this.volume * 0.5; this.music = a;
-    if (!this.muted) a.play().catch(() => {});
+    this.tryPlayMusic();
+  },
+  // browsers refuse to play sound before the first tap/click on the page.
+  // If that happens, wait for the first interaction and start the music then.
+  tryPlayMusic() {
+    const a = this.music;
+    if (!a || this.muted) return;
+    const p = a.play();
+    if (p && p.catch) p.catch(() => this.armMusicUnlock());
+  },
+  armMusicUnlock() {
+    if (this.unlockArmed) return;
+    this.unlockArmed = true;
+    const evs = ['pointerdown', 'touchstart', 'mousedown', 'keydown'];
+    const go = () => {
+      this.unlockArmed = false;
+      evs.forEach(e => document.removeEventListener(e, go, true));
+      this.ac();
+      const a = this.music;
+      if (a && !this.muted && a.paused) { const p = a.play(); if (p && p.catch) p.catch(() => this.armMusicUnlock()); }
+    };
+    evs.forEach(e => document.addEventListener(e, go, true));
   },
   stopMusic() { if (this.music) { this.music.pause(); this.music = null; } this.songPath = null; this.musicName = null; },
   // play a sound file; sounds stack unless one marked exclusive is playing
