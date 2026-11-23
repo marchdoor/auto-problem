@@ -48,6 +48,16 @@ const ACH_LIST = [
     desc: 'john tanner and woto tolff meet front to front, and woto tolff wins.',
     hint: 'john tanner and the vodafone ceo might have words. one of them has to win.' },
 
+  { id: 'cut_giuseppe', cat: 'cutscenes', tier: 'red', name: 'giuseppe settles it', img: 'units/g2.png', secret: true, video: 'giuseppekill',
+    desc: 'giuseppe 1, 2 or 4 kills gavin collins or woto tolff while both of them are on the enemy team.',
+    hint: 'giuseppe has a score to settle with two of them. they have to be on the same team.' },
+  { id: 'cut_noyes', cat: 'cutscenes', tier: 'red', name: 'no yes problem', img: 'units/yesproblem.png', secret: true, video: 'noyes3',
+    desc: 'no problem or yes problem is about to kill 3 or more enemies in one battle. the video starts when they start attacking.',
+    hint: 'a problem that keeps killing.' },
+  { id: 'cut_bondo', cat: 'cutscenes', tier: 'red', name: 'bondo gets him', img: 'units/bondo2prime.png', secret: true, video: 'bondokill',
+    desc: 'bondo 2, bondo 2 prime or cigga nover kills m° giuseppe creatore.',
+    hint: 'one of the bondos can end the line.' },
+
   // ---- runs ----
   { id: 'firstblood', cat: 'run', tier: 'bronze', name: 'first blood', img: 'units/noproblem.png', desc: 'win your first battle.' },
   { id: 'level3', cat: 'run', tier: 'bronze', name: 'ssj', img: 'units/tannerjohn.png', desc: 'get a character to level 3.' },

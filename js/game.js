@@ -596,7 +596,7 @@ async function playBattle(frames, opts = {}) {
   const plan = planDeathSounds(frames, opts);
   const replaceSynth = MANIFEST.death.length > 0 || !!opts.sudden;
   // john tanner vs the vodafone ceo: a cutscene when they meet front to front
-  let cut = null; try { cut = (skipping || opts.sudden) ? null : CUT.plan(frames); } catch (e) { console.error(e); }
+  let cuts = [], cut = null; try { cuts = (skipping || opts.sudden) ? [] : CUT.plan(frames); } catch (e) { console.error(e); }
   // online sudden death: the battle is timed so it ends exactly when the sudden death song ends.
   // The time left in the song is read the moment the battle starts. Every frame then gets a share
   // of what is left, and it re-adjusts as it goes.
@@ -617,17 +617,20 @@ async function playBattle(frames, opts = {}) {
     if (skipping) { if (CUT.active && !CUT.sd && !CUT.lastOn) CUT.close(true); prev = f; continue; }
     let hold, closeCut = false;
     if (syncEnd) hold = wSum[i] > 0 ? Math.max(40, (syncEnd - Date.now() - fSum[i]) * w[i] / wSum[i]) : 0;
-    if (cut && i === cut.k) {
-      // the video plays while they stand face to face. The frames up to the death are stretched,
-      // so the loser dies right as the video ends.
+    const starting = cuts.find(c => c.k === i);
+    if (starting && !syncEnd) {
+      // the video plays and the frames up to the death are stretched, so it ends right as that death happens
+      cut = starting;
       const total = CUTSCENES[cut.key].dur * 1000, n = cut.d - cut.k;
       if (CUT.open(cut.key)) {
+        CUT.markSeen(cut.key);
         if (n === 0) await CUT.wait(Math.max(0, total - 470));
         else cut.hold = Math.max(350, (total - 300 - 170 * n) / n);
       } else cut = null;
     }
     if (cut && CUT.active && !syncEnd) { if (i >= cut.k && i < cut.d && cut.hold) hold = cut.hold; if (i === cut.d) closeCut = true; }
     try { await playFrame(f, prev, i, plan[i], replaceSynth, hold, closeCut); } catch (e) { console.error('battle frame', i, e); }
+    if (cut && i >= cut.d) cut = null;
     prev = f;
   }
   if (syncEnd) speed = savedSpeed;

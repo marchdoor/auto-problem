@@ -12,14 +12,31 @@ const CUTSCENES = {
 };
 CUTSCENES.sudden = { src: 'assets/cutscenes/suddendeathvideo.mp4', dur: 58.7, ach: 'sudden', title: 'sudden death' };
 CUTSCENES.suddenlast = { src: 'assets/cutscenes/suddendeathlastdeathsfxVIDEO.mp4', dur: 10.4, ach: 'suddenlast', title: 'last death' };
+CUTSCENES.giuseppekill = { src: 'assets/cutscenes/giuseppe124killsvodafoneceoorgavincollins.mp4', dur: 5.5, ach: 'cut_giuseppe', title: 'giuseppe vs the rat' };
+CUTSCENES.noyes3 = { src: 'assets/cutscenes/noyesproblem3killsplus.mp4', dur: 24.6, ach: 'cut_noyes', title: 'no problem / yes problem' };
+CUTSCENES.bondokill = { src: 'assets/cutscenes/bondo2killsgiuseppe1.mp4', dur: 7.3, ach: 'cut_bondo', title: 'bondo vs giuseppe' };
 const DUCK_LEVEL = 0.15;   // other sounds keep 15% (85% quieter) while the video plays
 
 const CUT = {
   el: null, v: null, active: false, key: null, closing: null,
 
-  // Finds a john tanner vs vodafone ceo meeting in a finished battle.
-  // k: frame where they fight, d: frame where one of them dies, key: which video
+  // A cutscene may only play once per run (or online game). Dev mode can turn that off.
+  played(key) { return !(typeof DEV !== 'undefined' && DEV.on && DEV.cutRepeat) && !!(S && S.cutsSeen && S.cutsSeen[key]); },
+  markSeen(key) { if (S) { (S.cutsSeen = S.cutsSeen || {})[key] = true; try { saveRun(); } catch (e) {} } },
+
+  // Looks through a finished battle for moments that have a cutscene. Returns a list of
+  // { k, d, key }: k = frame where the video starts, d = frame where it ends (a death).
+  // The battle is stretched between them so the video ends right as that death happens.
   plan(frames) {
+    const out = [];
+    const idOf = {};
+    frames.forEach(f => f.A.concat(f.B).forEach(u => { idOf[u.uid] = u.id; }));
+    const attackFrame = (uid, d) => { for (let j = d; j >= 0; j--) if (frames[j].fx.some(x => x.type === 'attack' && x.uid === uid)) return j; return d; };
+    const firstAttack = (uid, d) => { for (let j = 0; j <= d; j++) if (frames[j].fx.some(x => x.type === 'attack' && x.uid === uid)) return j; return d; };
+    const rosterHas = (side, ids, d) => ids.every(id => { for (let j = 0; j <= d; j++) if ((side === 'A' ? frames[j].A : frames[j].B).some(u => u.id === id)) return true; return false; });
+    const add = (c) => { if (c && !this.played(c.key) && !out.some(o => o.key === c.key)) out.push(c); };
+
+    // 1. john tanner vs the vodafone ceo, front to front: the one who dies decides the video
     for (let i = 0; i < frames.length; i++) {
       const f = frames[i];
       const atk = f.fx.filter(x => x.type === 'attack').map(x => x.uid);
@@ -30,11 +47,33 @@ const CUT = {
       for (let d = i; d < frames.length; d++) {
         const dead = frames[d].fx.filter(x => x.type === 'faint').map(x => x.uid);
         const jd = dead.includes(j.uid), vd = dead.includes(v.uid);
-        if (jd || vd) return (jd && vd) ? null : { k: i, d, key: vd ? 'johnwin' : 'vodafonewin' };
+        if (jd || vd) { if (!(jd && vd)) add({ k: i, d, key: vd ? 'johnwin' : 'vodafonewin' }); break; }
       }
-      return null;
+      break;
     }
-    return null;
+    // 2. giuseppe 1, 2 or 4 kills gavin collins or the vodafone ceo, with both of them on that team
+    // 3. bondo 2, bondo 2 prime or cigga nover kills giuseppe 1
+    // 4. no problem or yes problem gets their 3rd kill: the video starts when they start attacking
+    const killCount = {};
+    for (let d = 0; d < frames.length; d++) {
+      for (const x of frames[d].fx) {
+        if (x.type !== 'faint' || !x.killerId) continue;
+        const victim = idOf[x.uid];
+        if (['giuseppe', 'g2', 'giuseppe4'].includes(x.killerId) && ['gavin', 'vodafone'].includes(victim) && rosterHas(x.side, ['gavin', 'vodafone'], d))
+          add({ k: attackFrame(x.killerUid, d), d, key: 'giuseppekill' });
+        if (['bondo2', 'bondo2prime', 'ciggan'].includes(x.killerId) && victim === 'giuseppe')
+          add({ k: attackFrame(x.killerUid, d), d, key: 'bondokill' });
+        if (['noproblem', 'yesproblem'].includes(x.killerId)) {
+          killCount[x.killerUid] = (killCount[x.killerUid] || 0) + 1;
+          if (killCount[x.killerUid] === 3) add({ k: firstAttack(x.killerUid, d), d, key: 'noyes3' });
+        }
+      }
+    }
+    // one video at a time: earliest first, and skip any that would overlap
+    out.sort((a, b) => a.k - b.k);
+    const res = []; let until = -1;
+    for (const c of out) if (c.k > until) { res.push(c); until = c.d; }
+    return res;
   },
 
   // turns the player on. big = centred and larger (watching it again from the achievements page)
