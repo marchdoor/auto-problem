@@ -279,6 +279,7 @@ const NET = {
     this.lastSudden = !!bt.sudden;
     await playBattle(frames, { result, seed: bt.seed, sudden: bt.sudden });
     S.nikeKills += mineIsA ? res.stats.cloneKills : res.stats.killsA;
+    applyFusions(res.fusions, mineIsA ? 'A' : 'B');
     this.showResult(result, m.players);
   },
   standingsHTML(players) {

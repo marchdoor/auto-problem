@@ -45,9 +45,31 @@ const UNITS = {
     }
   },
 
+  randomman: {
+    name: 'random man', tier: 1, atk: 2, hp: 3, img: 'randomman.png',
+    text: L => `<b>start of battle:</b> a random effect: +${L}/+${L} for himself, ${2 * L} damage to a random enemy, +${L} attack for a random friend, a ${L}/${L} twin behind him, or nothing at all`,
+    on: {
+      startBattle(c, u, L) {
+        const r = Math.floor(c.rng() * 5);
+        if (r === 0) { c.buff(u, L, L); c.caption('random man got lucky'); }
+        else if (r === 1) { const e = c.randomEnemy(u.side); if (e) { c.damage(e, 2 * L, u, 'random'); c.caption('random man throws something'); } }
+        else if (r === 2) { const f = c.randomAlly(u.side); if (f) { c.buff(f, L, 0); c.caption('random man helps a stranger'); } }
+        else if (r === 3) { c.summon(u.side, c.indexOf(u) + 1, 'randomman', L, L); c.caption('another random man appears'); }
+        else c.caption('random man does nothing');
+      }
+    }
+  },
+  tohnjanner: {
+    name: 'tohn janner', tier: 1, atk: 4, hp: 4, img: 'tohnjanner.png',
+    text: L => `no ability, just a strong start. <b>level up:</b> an extra +1/+1`,
+    on: {
+      levelUp(s, u) { s.buff(u, 1, 1); }
+    }
+  },
+
   // ---------------- TIER 2 ----------------
   venom: {
-    name: 'barbie venom', tier: 2, atk: 2, hp: 3, img: 'venom',
+    name: 'barbie venom', tier: 2, atk: 2, hp: 3, img: 'venom', tags: ['mib'],
     text: L => `<b>faint:</b> give 2 random friends +${L}/+${L}. venom cries`,
     on: {
       faint(c, u, L) { c.randomAllies(u.side, 2).forEach(f => c.buff(f, L, L)); c.caption('venom cries and nukes'); }
@@ -61,7 +83,7 @@ const UNITS = {
     }
   },
   kenji: {
-    name: 'lt. kenji', tier: 2, atk: 2, hp: 3, img: 'kenji',
+    name: 'lt. kenji', tier: 2, atk: 2, hp: 3, img: 'kenji', tags: ['mib'],
     text: L => `<b>faint:</b> summon kenji's twin brother ${2 * L}/${2 * L}. the kidnapped one was the twin`,
     on: {
       faint(c, u, L, idx) { c.summon(u.side, idx, 'kenjitwin', 2 * L, 2 * L); c.caption('it was kenjis twin brother all along'); }
@@ -84,14 +106,14 @@ const UNITS = {
 
   // ---------------- TIER 3 ----------------
   funny: {
-    name: 'dr. funnyheimer', tier: 3, atk: 3, hp: 3, img: 'funny',
+    name: 'dr. funnyheimer', tier: 3, atk: 3, hp: 3, img: 'funny', tags: ['mib'],
     text: L => `<b>faint:</b> negev nuke, deal ${2 * L} damage to EVERYONE. free sacrifice`,
     on: {
       faint(c, u, L) { c.caption('free sacrifice and negev nuke'); c.sfx('nuke'); c.all().forEach(t => c.damage(t, 2 * L, u, 'nuke')); }
     }
   },
   crosos: {
-    name: 'sgt. crosos', tier: 3, atk: 3, hp: 4, img: 'crosos',
+    name: 'sgt. crosos', tier: 3, atk: 3, hp: 4, img: 'crosos', tags: ['mib'],
     text: L => `<b>start of battle:</b> betray the friend behind (${2 * L} damage) and gain +${2 * L} attack`,
     on: {
       startBattle(c, u, L) {
@@ -132,6 +154,33 @@ const UNITS = {
     }
   },
 
+  paulwalter: {
+    name: 'paul walter', tier: 3, atk: 4, hp: 4, img: 'paulwalter.png',
+    text: L => `<b>start of battle:</b> if renault is on the team, gain +${2 * L}/+${2 * L} and give renault +${L} attack. otherwise gain +${L} attack. renault's henchman`,
+    on: {
+      startBattle(c, u, L) {
+        const boss = c.team(u.side).find(f => f.id === 'renault' && !f.dead);
+        if (boss) { c.buff(u, 2 * L, 2 * L); c.buff(boss, L, 0); c.caption("paul walter follows renault's orders"); }
+        else c.buff(u, L, 0);
+      }
+    }
+  },
+  cemeteryfc: {
+    name: 'cemetery fc', tier: 3, atk: 3, hp: 3, img: 'cemeteryfc.webp',
+    text: L => `<b>start of battle:</b> pure chaos. one of: a 720 hour ban on a random enemy (just gone), swap attack and health with a random enemy, a ${L}/${L} ghost joins, ${L} damage to everyone, the monitor is on so all friends get +${L}/+${L}, or he rage quits (dies, friends +${2 * L}/+${2 * L}). rl number, turn on monitor, next game enjoy ban ;)`,
+    on: {
+      startBattle(c, u, L) {
+        const r = Math.floor(c.rng() * 6);
+        if (r === 0) { const e = c.randomEnemy(u.side); if (e) { c.ban(e); c.caption(`${e.name} enjoys a 720 hour ban`); } }
+        else if (r === 1) { const e = c.randomEnemy(u.side); if (e) { const ua = u.atk, uh = u.hp, ea = e.atk, eh = e.hp; u.atk = ea; u.hp = eh; u.maxHp = eh; e.atk = ua; e.hp = uh; e.maxHp = uh; c.fx(u, 'buff', [ea - ua, eh - uh]); c.fx(e, 'buff', [ua - ea, uh - eh]); c.caption('rl number swapped'); } }
+        else if (r === 2) { c.summon(u.side, c.indexOf(u) + 1, 'cemeteryghost', L, L); c.caption('a ghost joins the cemetery'); }
+        else if (r === 3) { c.all().forEach(t => c.damage(t, L, u, 'chaos')); c.caption('the monitor explodes'); }
+        else if (r === 4) { c.team(u.side).forEach(f => c.buff(f, L, L)); c.caption('turn on monitor'); }
+        else { c.team(u.side).forEach(f => { if (f !== u) c.buff(f, 2 * L, 2 * L); }); c.damage(u, 9999, u, 'ragequit'); c.caption('cemetery fc rage quits'); }
+      }
+    }
+  },
+
   // ---------------- TIER 4 ----------------
   nfsvp: {
     name: 'nfs mafia vp', tier: 4, atk: 4, hp: 4, img: 'nfsvp',
@@ -155,7 +204,7 @@ const UNITS = {
     }
   },
   janner: {
-    name: 'janner tohn', tier: 4, atk: 3, hp: 5, img: 'janner',
+    name: 'janner tohn', tier: 4, atk: 3, hp: 5, img: 'janner', tags: ['mib'],
     text: L => `<b>friend ahead faints:</b> gain +${2 * L}/+${2 * L}. clutches the round`,
     on: {
       friendAheadFaint(c, u, L) { c.buff(u, 2 * L, 2 * L); c.caption('janner tohn clutches the round'); }
@@ -176,9 +225,17 @@ const UNITS = {
     }
   },
 
+  yesproblem: {
+    name: 'yes problem', tier: 4, atk: 3, hp: 5, img: 'yesproblem.png',
+    text: L => `<b>knock out:</b> heal all friends for ${2 * L}. the healer to no problem's killer`,
+    on: {
+      knockout(c, u, L) { c.team(u.side).forEach(f => c.heal(f, 2 * L)); c.caption('yes problem'); }
+    }
+  },
+
   // ---------------- TIER 5 ----------------
   darius: {
-    name: 'secretary darius', tier: 5, atk: 4, hp: 6, img: 'darius',
+    name: 'secretary darius', tier: 5, atk: 4, hp: 6, img: 'darius', tags: ['mib'],
     text: L => `<b>faint:</b> 480V transformer, deal ${2 * L} damage to all enemies. no one can touch me`,
     on: {
       faint(c, u, L) { c.caption('no one can touch me'); c.sfx('nuke'); c.team(c.other(u.side)).slice().forEach(e => c.damage(e, 2 * L, u, '480v')); }
@@ -227,6 +284,30 @@ const UNITS = {
     }
   },
 
+  alqaida: {
+    name: 'al qaida ceo', tier: 5, atk: 5, hp: 6, img: 'alqaida.png',
+    text: L => `<b>start of battle:</b> universal scale problem, ${L} damage to every enemy (double to marchdoor investigation bureau characters). <b>knock out:</b> gain +${L}/+${L}. vows to end marchdoor`,
+    on: {
+      startBattle(c, u, L) { c.team(c.other(u.side)).slice().forEach(e => c.damage(e, L, u, 'universal')); c.caption('universal scale problem'); },
+      knockout(c, u, L) { c.buff(u, L, L); }
+    }
+  },
+  giuseppe4: {
+    name: 'giuseppe 4', tier: 5, atk: 3, hp: 6, img: 'giuseppe4.png', tags: ['nike'],
+    text: L => `<b>start of battle:</b> raises the baton, all friends +${L}/+${L}. <b>end turn:</b> all friends +${L} health. the conductor`,
+    on: {
+      startBattle(c, u, L) { c.team(u.side).forEach(f => c.buff(f, L, L)); c.caption('giuseppe 4 raises the baton'); },
+      endTurn(s, u, L) { s.allFriends().forEach(f => s.buff(f, 0, L)); }
+    }
+  },
+  bondo2prime: {
+    name: 'bondo 2 prime', tier: 5, atk: 3, hp: 5, img: 'bondo2prime.png',
+    text: L => `weak, but <b>faint:</b> rises again as cigga nover (${3 * L + 3}/${4 * L + 4}, same level)`,
+    on: {
+      faint(c, u, L, idx) { const n = c.summon(u.side, idx, 'ciggan', 3 * L + 3, 4 * L + 4, u.exp); if (n) c.caption('bondo 2 prime ascends into cigga nover'); }
+    }
+  },
+
   // ---------------- TIER 6 ----------------
   giuseppe: {
     name: 'm° giuseppe creatore', tier: 6, atk: 6, hp: 7, img: 'giuseppe', tags: ['nike'],
@@ -261,7 +342,7 @@ const UNITS = {
     }
   },
   john: {
-    name: 'john tanner', tier: 6, atk: 6, hp: 6, img: 'john',
+    name: 'john tanner', tier: 6, atk: 6, hp: 6, img: 'john', tags: ['mib'],
     text: L => `deals <b>double damage</b> to nike units. <b>end turn:</b> gain +${L} attack. ends the line`,
     on: {
       endTurn(s, u, L) { s.buff(u, L, 0); }
@@ -282,9 +363,9 @@ const UNITS = {
   },
   ceo3m: {
     name: '3m mafia ceo', tier: 6, atk: 5, hp: 6, img: 'ceo3m',
-    text: L => `<b>start of battle:</b> all friends +${L} attack. intervenes with the problem`,
+    text: L => `<b>start of battle:</b> all friends +${2 * L} attack and +${2 * L} health. intervenes with the problem`,
     on: {
-      startBattle(c, u, L) { c.team(u.side).forEach(f => c.buff(f, L, 0)); }
+      startBattle(c, u, L) { c.team(u.side).forEach(f => c.buff(f, 2 * L, 2 * L)); }
     }
   },
   boschceo: {
@@ -302,7 +383,36 @@ const UNITS = {
     }
   },
 
+  criminol: {
+    name: 'criminol', tier: 6, atk: 2, hp: 8, img: 'criminol.png', alt: 'criminol_nuke.png',
+    text: L => `weak, but every turn there is a 15% chance he starts charging a nuke (his picture changes). next turn it goes off: ${14 * L} damage to EVERYONE, himself included`,
+    on: {
+      roundStart(c, u, L) {
+        if (u.flags.charging) {
+          u.flags.charging = false; c.caption('criminol nukes everything'); c.sfx('nuke');
+          c.all().forEach(t => c.damage(t, 14 * L, u, 'nuke'));
+        } else if (c.rng() < 0.15) { u.flags.charging = true; c.caption('criminol is going to nuke everything'); }
+      }
+    }
+  },
+
   // ---------------- TOKENS (not in shop) ----------------
+  ciggan: {
+    name: 'cigga nover', tier: 6, atk: 10, hp: 12, img: 'ciggan.png', token: true,
+    text: () => `bondo 2 prime, reborn`, on: {}
+  },
+  cemeteryghost: {
+    name: 'cemetery ghost', tier: 1, atk: 1, hp: 1, img: 'cemeteryfc.webp', token: true,
+    text: () => `boo`, on: {}
+  },
+  jahntonner: {
+    name: 'jahn tonner', tier: 7, atk: 20, hp: 20, img: 'jahntonner.png', tags: ['mib'], secret: true,
+    text: L => `sent by allah himself to end giuseppes reign. <b>start of battle:</b> all friends +${L}/+${L}. deals triple damage to nike inc. <b>knock out:</b> gain +${2 * L}/+${2 * L}`,
+    on: {
+      startBattle(c, u, L) { c.team(u.side).forEach(f => c.buff(f, L, L)); },
+      knockout(c, u, L) { c.buff(u, 2 * L, 2 * L); }
+    }
+  },
   clonetoken: {
     name: 'giuseppe n.', tier: 1, atk: 1, hp: 1, img: 'clone', tags: ['nike'], token: true,
     text: () => `one of 104`, on: {}

@@ -9,6 +9,8 @@ const MAX_STAT_NORMAL = 50, MAX_STAT_ENDLESS = 150;
 let MAX_STAT = MAX_STAT_NORMAL;
 function setEndless(on) { ENDLESS = !!on; MAX_STAT = ENDLESS ? MAX_STAT_ENDLESS : MAX_STAT_NORMAL; }
 const expCap = () => ENDLESS ? 9999 : 5;
+// adding to a stat: positive gains stop at the cap, but never pull a stat that is already above it back down
+const capAdd = (cur, d) => d > 0 ? Math.max(cur, Math.min(MAX_STAT, cur + d)) : cur + d;
 const maxLevel = () => ENDLESS ? Infinity : 3;
 const levelOf = exp => exp >= 5 ? (ENDLESS ? 3 + Math.floor((exp - 5) / 3) : 3) : exp >= 2 ? 2 : 1;
 // the least experience a unit needs to be a given level (endless: 3 per level after level 2)
@@ -61,7 +63,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
 
   const bombs = [];          // rebook nukes planted on enemy units
   const snap = () => {
-    const cp = side => T[side].map(u => ({ uid: u.uid, id: u.id, name: u.name, atk: u.atk, hp: Math.max(0, u.hp), lvl: u.lvl, exp: u.exp, item: u.item, dead: u.dead, bomb: (bombs.find(b => b.target === u && b.left > 0) || {}).left || 0 }));
+    const cp = side => T[side].map(u => ({ uid: u.uid, id: u.id, name: u.name, atk: u.atk, hp: Math.max(0, u.hp), lvl: u.lvl, exp: u.exp, item: u.item, dead: u.dead, alt: !!u.flags.charging, bomb: (bombs.find(b => b.target === u && b.left > 0) || {}).left || 0 }));
     frames.push({ A: cp('A'), B: cp('B'), fx: pendingFx, cap: pendingCap, sfx: pendingSfx });
     pendingFx = []; pendingCap = null; pendingSfx = [];
   };
@@ -91,8 +93,17 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     fx: (u, type, amt) => { pendingFx.push({ uid: u.uid, type, amt }); },
     buff(u, a, h) {
       if (!u || u.dead) return;
-      u.atk = Math.min(MAX_STAT, u.atk + a); u.hp = Math.min(MAX_STAT, u.hp + h); u.maxHp = Math.min(MAX_STAT, u.maxHp + h);
+      u.atk = capAdd(u.atk, a); u.hp = capAdd(u.hp, h); u.maxHp = capAdd(u.maxHp, h);
       c.fx(u, 'buff', [a, h]);
+    },
+    heal(u, n) {
+      if (!u || u.dead || n <= 0) return;
+      const h = Math.min(n, Math.max(0, MAX_STAT - u.hp)); if (h <= 0) return;
+      u.hp += h; u.maxHp = Math.max(u.maxHp, u.hp); c.fx(u, 'heal', h);
+    },
+    ban(u) {                      // removed from the game (faint abilities still happen)
+      if (!u || u.dead) return;
+      u.flags.banned = true; u.dead = true; c.fx(u, 'ban');
     },
     debuff(u, amt) {
       if (!u || u.dead) return;
@@ -103,6 +114,8 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       if (shopMode || !t || t.dead || amt <= 0) return 0;
       if (turn0 && t.item === 'insideman') { c.fx(t, 'ability'); return 0; }
       if (src && src.id === 'john' && hasTag(t, 'nike')) amt *= 2;
+      if (src && src.id === 'jahntonner' && hasTag(t, 'nike')) amt *= 3;
+      if (src && src.id === 'alqaida' && hasTag(t, 'mib')) amt *= 2;
       if (t.item === 'petronas' && kind !== 'burn') amt = Math.max(1, amt - 2);
       if (t.item === 'keys' && !t.flags.keyUsed && t.hp - amt <= 0) { t.flags.keyUsed = true; amt = t.hp - 1; c.caption('keys to the famous basement'); }
       t.hp -= amt; t.lastHitBy = src;
@@ -110,10 +123,10 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       if (t.hp <= 0) t.dead = true; else hurtQ.push(t);
       return amt;
     },
-    summon(side, idx, id, atk, hp) {
+    summon(side, idx, id, atk, hp, exp = 0) {
       const alive = T[side].filter(u => !u.dead);
       if (noSummon || alive.length >= fieldCap) return null;
-      const n = mk({ id, atk, hp, exp: 0 }, side);
+      const n = mk({ id, atk, hp, exp }, side);
       n.uid = UID++;
       if (id === 'clonetoken') n.name = 'giuseppe n.' + (cloneNo++ % 104 + 1);
       T[side].splice(Math.min(Math.max(0, idx), T[side].length), 0, n);
@@ -180,6 +193,22 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
   pendingCap = pick(CAPTIONS.start);
   pendingSfx.push('start');
   snap();
+  // secret: john tanner + tanner john (he must be level 3) fuse into jahn tonner, stats added up and doubled
+  const fusions = [];
+  for (const side of ['A', 'B']) {
+    const t = T[side];
+    const j = t.find(u => u.id === 'john' && !u.dead), tj = t.find(u => u.id === 'tannerjohn' && u.exp >= 5 && !u.dead);
+    if (!j || !tj) continue;
+    const at = Math.min(t.indexOf(j), t.indexOf(tj));
+    const atk = (j.atk + tj.atk) * 2, hp = (j.hp + tj.hp) * 2, exp = Math.max(j.exp, tj.exp), item = j.item || tj.item || null;
+    c.fx(j, 'absorb'); c.fx(tj, 'absorb');
+    t.splice(t.indexOf(j), 1); t.splice(t.indexOf(tj), 1);
+    const f = mk({ id: 'jahntonner', atk, hp, exp, item }, side); f.uid = UID++;
+    t.splice(Math.min(at, t.length), 0, f); c.fx(f, 'summon');
+    fusions.push({ side, uids: [j.srcUid, tj.srcUid], atk, hp, exp, item });
+    pendingCap = 'tanner john and john tanner fuse into jahn tonner'; pendingSfx.push('giuseppe');
+    snap();
+  }
   // sudden death card bans: the banned cards die before anything else (their faint abilities still trigger)
   if (opts.ban && opts.ban.length) {
     const banned = T.A.concat(T.B).filter(u => opts.ban.some(b => b.side === u.side && b.uid === u.srcUid));
@@ -240,6 +269,10 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
   };
   let rounds = 0;
   while (T.A.length && T.B.length && rounds++ < 200) {
+    T.A.concat(T.B).forEach(u => { if (!u.dead) trigger(u, 'roundStart'); });
+    if (pendingFx.length) snap();
+    settle();
+    if (!T.A.length || !T.B.length) break;
     let a = T.A[0], b = T.B[0];
     trigger(a, 'beforeAttack'); trigger(b, 'beforeAttack');
     if (pendingFx.length) snap();
@@ -296,7 +329,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
   }
 
   const result = !T.A.length && !T.B.length ? 'draw' : !T.A.length ? 'lose' : !T.B.length ? 'win' : 'draw';
-  return { frames, result, stats };
+  return { frames, result, stats, fusions };
 }
 
 // ============================================================
@@ -306,7 +339,7 @@ function tierFor(turn) { return Math.min(6, Math.ceil(turn / 2)); }
 
 function buildBotTeam(turn, rng) {
   const maxTier = tierFor(turn);
-  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && UNITS[k].tier <= maxTier);
+  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier <= maxTier);
   const count = Math.min(5, 2 + Math.floor(turn / 1.5));
   const team = [];
   for (let i = 0; i < count; i++) {

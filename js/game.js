@@ -19,7 +19,7 @@ let S = null;          // run state
 let sel = null;        // {kind:'shop'|'item'|'team', idx}
 let speed = 1, skipping = false, battleBusy = false;
 
-const imgSrc = id => { const i = UNITS[id].img; return i ? `assets/units/${i.includes('.') ? i : i + '.png'}` : null; };
+const imgSrc = (id, alt) => { const d = UNITS[id]; const i = (alt && d.alt) ? d.alt : d.img; return i ? `assets/units/${i.includes('.') ? i : i + '.png'}` : null; };
 const itemArt = (id, cls = '') => { const it = ITEMS[id]; return it.img ? `<img class="iimg ${cls} ${it.fit === 'contain' ? 'contain' : it.fit === 'logo' ? 'logo' : it.fit === 'whole' ? 'whole' : ''}" src="assets/items/${it.img}" alt="">` : it.icon; };
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const itemCost = it => it.cost || ITEM_COST;
@@ -41,7 +41,7 @@ function shopCtx() {
   const team = S.team;
   const live = () => team.filter(Boolean);
   const s = {
-    buff(u, a, h) { if (!u) return; const a0 = u.atk, h0 = u.hp; u.atk = Math.min(MAX_STAT, u.atk + a); u.hp = Math.min(MAX_STAT, u.hp + h); logBuff(u, u.atk - a0, u.hp - h0); flashCard(u.uid); },
+    buff(u, a, h) { if (!u) return; const a0 = u.atk, h0 = u.hp; u.atk = capAdd(u.atk, a); u.hp = capAdd(u.hp, h); logBuff(u, u.atk - a0, u.hp - h0); flashCard(u.uid); },
     gold(n) { S.gold = Math.max(0, S.gold + n); },
     randomFriends(u, n) { const a = live().filter(f => f !== u); const r = []; while (r.length < n && a.length) r.push(a.splice(Math.floor(Math.random() * a.length), 1)[0]); return r; },
     allFriends: () => live(),
@@ -137,13 +137,13 @@ function shopSizes() {
 // a shop character: normal, or a veteran in the final wave's rebuild shop
 function shopUnit(tier) {
   if (S.rebuild) {
-    const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && UNITS[k].tier >= REBUILD.minTier);
+    const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier >= REBUILD.minTier);
     return mkVeteran(pick(pool));
   }
   return newUnit(randomUnitId(tier));
 }
 function randomUnitId(maxTier) {
-  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && UNITS[k].tier <= maxTier);
+  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier <= maxTier);
   return pick(pool);
 }
 function randomItemId(maxTier) {
@@ -174,8 +174,8 @@ function placeAt(unit, i) {
 
 function mergeInto(target, src) {
   const before = lvl(target), a0 = target.atk, h0 = target.hp;
-  target.atk = Math.min(MAX_STAT, Math.max(target.atk, src.atk) + 1);
-  target.hp = Math.min(MAX_STAT, Math.max(target.hp, src.hp) + 1);
+  target.atk = capAdd(Math.max(target.atk, src.atk), 1);
+  target.hp = capAdd(Math.max(target.hp, src.hp), 1);
   logBuff(target, target.atk - a0, target.hp - h0, 'merge');
   target.exp = Math.min(expCap(), target.exp + src.exp + 1);
   if (!target.item && src.item) target.item = src.item;
@@ -186,8 +186,9 @@ function mergeInto(target, src) {
 function onLevelUp(u) {
   Audio2.play('levelup');
   toast(`${UNITS[u.id].name} goes ssj (level ${lvl(u)})`);
+  shopTrigger(u, 'levelUp');
   const t = Math.min(6, tierFor(S.turn) + 1);
-  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && UNITS[k].tier === t);
+  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier === t);
   if (S.shop.units.length < 8) S.shop.units.push({ u: S.rebuild ? shopUnit(6) : newUnit(pick(pool)), frozen: false });
 }
 
@@ -305,7 +306,7 @@ function cardEl(u, opts = {}) {
   el.className = 'card' + (opts.sel ? ' sel' : '') + (opts.frozen ? ' frozen' : '');
   el.dataset.uid = u.uid;
   const L = u.lvl || levelOf(u.exp || 0), exp = u.exp || 0;
-  const src = imgSrc(u.id);
+  const src = imgSrc(u.id, u.alt);
   const pr = expProgress(exp);
   const pips = pr.need ? Array.from({ length: pr.need }, (_, k) => `<i class="${k < pr.have ? 'on' : ''}"></i>`).join('') : '';
   el.innerHTML = `
@@ -474,6 +475,7 @@ async function endTurn(forced) {
   $('#b-lives').textContent = S.lives; $('#b-wins').textContent = S.wins; $('#b-turn').textContent = S.turn;
   skipping = false;
   await playBattle(res.frames, { result: res.result, seed });
+  applyFusions(res.fusions, 'A');
 
   S.nikeKills += res.stats.cloneKills;
   finishBattle(res.result, isBoss);
@@ -487,6 +489,19 @@ function setBattleBg(seed) {
   if (!list.length) { el.style.backgroundImage = 'none'; return; }
   const path = list[Math.abs(Math.floor(seed)) % list.length];
   el.style.backgroundImage = `linear-gradient(rgba(0,0,0,.62), rgba(0,0,0,.42) 45%, rgba(0,0,0,.74)), url("${encodePath(path)}")`;
+}
+
+// john tanner + tanner john fused during the battle: the fusion stays
+function applyFusions(list, side) {
+  (list || []).filter(f => f.side === side).forEach(f => {
+    const iJ = S.team.findIndex(u => u && u.uid === f.uids[0]), iT = S.team.findIndex(u => u && u.uid === f.uids[1]);
+    if (iJ < 0 || iT < 0) return;
+    const at = Math.min(iJ, iT);
+    S.team[iJ] = null; S.team[iT] = null;
+    S.team[at] = newUnit('jahntonner', { atk: f.atk, hp: f.hp, exp: f.exp, item: f.item });
+    try { localStorage.setItem('np_secret_jahn', '1'); } catch (e) {}
+    toast('tanner john and john tanner fused into jahn tonner');
+  });
 }
 
 function renderBattleTeams(f) {
@@ -730,9 +745,12 @@ function howToPlay() {
 
 function codex() {
   let html = `<h2>all characters</h2><div class="codex">`;
-  for (let t = 1; t <= 6; t++) {
+  let found = false; try { found = localStorage.getItem('np_secret_jahn') === '1'; } catch (e) {}
+  for (let t = 1; t <= 7; t++) {
+    const list = Object.entries(UNITS).filter(([k, d]) => d.tier === t && !d.token && (!d.secret || found));
+    if (!list.length) continue;
     html += `<div class="codex-tier">tier ${t}</div>`;
-    Object.entries(UNITS).filter(([k, d]) => d.tier === t && !d.token).forEach(([k, d]) => {
+    list.forEach(([k, d]) => {
       const src = imgSrc(k);
       html += `<div class="entry">${src ? `<img src="${src}"${d.bw ? ' style="filter:grayscale(1) contrast(1.3)"' : ''}>` : `<div class="noimg">?</div>`}<div><h4>${d.name}</h4><div class="s">${d.atk}/${d.hp}${(d.tags || []).includes('nike') ? ' · nike inc.' : ''}</div><div class="d">${d.text(1)}</div></div></div>`;
     });
