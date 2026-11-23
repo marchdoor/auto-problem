@@ -2,6 +2,17 @@
 //  Game flow: title, shop phase, battle playback, results.
 // ============================================================
 const $ = s => document.querySelector(s);
+
+// phones: the visible height changes as the browser bars slide in and out.
+// Track it so the bottom buttons (end turn, descriptions) are never hidden.
+function fitAppHeight() {
+  const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  document.documentElement.style.setProperty('--app-h', Math.round(h) + 'px');
+}
+fitAppHeight();
+window.addEventListener('resize', fitAppHeight);
+window.addEventListener('orientationchange', () => setTimeout(fitAppHeight, 150));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitAppHeight);
 const UNIT_COST = 3, ITEM_COST = 3, ROLL_COST = 1, START_GOLD = 10, START_LIVES = 5, WIN_TARGET = 10;
 
 let S = null;          // run state

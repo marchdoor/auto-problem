@@ -13,10 +13,10 @@
   --card-w: 124px;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; }
+html, body { margin: 0; height: 100%; height: var(--app-h, 100%); background: var(--bg); color: var(--ink); overflow: hidden; }
 body { font-family: Arial, Helvetica, sans-serif; user-select: none; }
 #app {
-  position: relative; width: 100vw; height: 100vh; overflow: hidden;
+  position: relative; width: 100vw; height: 100vh; height: 100dvh; height: var(--app-h, 100dvh); overflow: hidden;
 }
 #app::before {
   content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
@@ -367,7 +367,7 @@ html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparen
   .result-box { min-width: 0; width: calc(100vw - 32px); padding: 22px 16px; }
   .result-box h2 { font-size: 56px; }
   .result-box .cap-style { font-size: 22px; }
-  .modal-box { width: calc(100vw - 24px); max-height: 90vh; padding: 18px 14px; box-shadow: 6px 6px 0 #000; }
+  .modal-box { width: calc(100vw - 24px); max-height: 90%; padding: 18px 14px; box-shadow: 6px 6px 0 #000; }
   .modal-box h2 { font-size: 28px; margin-right: 34px; }
   .modal-box p, .modal-box li { font-size: 14px; }
   .codex { grid-template-columns: 1fr; }
@@ -435,3 +435,7 @@ html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparen
 /* never squash the card rows; scroll the board instead if a screen is really short */
 .board > * { flex-shrink: 0; }
 .board { overflow-y: auto; overflow-x: hidden; }
+
+/* keep the bottom buttons clear of phone home bars / notches */
+.controls { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+@media (max-width: 760px) { .controls { padding-bottom: max(12px, env(safe-area-inset-bottom)); } .board { min-height: 0; } }
