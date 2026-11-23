@@ -231,7 +231,7 @@ const NET = {
     this.sudden = m.sudden || null;
     startTurn();
     $('#hud-sd').classList.toggle('hidden', !this.sudden);
-    if (this.sudden) { $('#hud-sd').textContent = '☠ sudden death · last round'; toast('sudden death. after the shop you pick: remove a buff or ban a card'); }
+    if (this.sudden) { ACH.unlock('sudden'); $('#hud-sd').textContent = '☠ sudden death · last round'; toast('sudden death. after the shop you pick: remove a buff or ban a card'); }
     this.deadline = Date.now() + m.seconds * 1000;
     $('#hud-timer').classList.remove('hidden');
     clearInterval(this.timerInt);
@@ -277,6 +277,7 @@ const NET = {
     $('#b-lives').textContent = S.lives; $('#b-wins').textContent = S.wins; $('#b-turn').textContent = S.turn;
     skipping = false;
     this.lastSudden = !!bt.sudden;
+    this.lastGhost = mineIsA && /^ghost/.test(bt.nameB || '');
     await playBattle(frames, { result, seed: bt.seed, sudden: bt.sudden });
     S.nikeKills += mineIsA ? res.stats.cloneKills : res.stats.killsA;
     applyFusions(res.fusions, mineIsA ? 'A' : 'B');
@@ -290,6 +291,7 @@ const NET = {
   showResult(result, players) {
     const meP = this.me(players);
     S.lives = meP.lives; S.wins = meP.wins; setColour();
+    ACH.afterBattle(result, { wins: meP.wins, lives: meP.lives, startLives: NET_LIVES, ghost: this.lastGhost, net: true });
     playResultTheme(result, this.lastSudden);
     $('#result-title').textContent = result;
     $('#result-cap').textContent = pick(CAPTIONS[result]);
@@ -318,6 +320,7 @@ const NET = {
   onEnd(m) {
     clearInterval(this.timerInt);
     const win = m.winner === this.myId;
+    ACH.unlock('firstfriend'); if (win) ACH.unlock('beatfriend');
     const w = m.players.find(p => p.id === m.winner);
     const show = () => {
       $('#result').classList.add('hidden'); $('#modal-close').classList.remove('hidden');
@@ -539,6 +542,8 @@ Object.assign(NET, {
       return `you remove ${r.label} from ${r.unit}`;
     });
     if (!this.amAlive()) return;
+    if (m.mode === 'ban') ACH.unlock('mutual');
+    else if (m.list.some(r => r.target !== this.myId)) ACH.unlock('banhammer');
     this.sdShowTeams(m);
     if (m.mode === 'ban') m.list.forEach(r => {
       const side = r.target === this.myId ? '#b-mine' : '#b-theirs';

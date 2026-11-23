@@ -17,7 +17,7 @@ const UNIT_COST = 3, ITEM_COST = 3, ROLL_COST = 1, START_GOLD = 10, START_LIVES 
 
 let S = null;          // run state
 let sel = null;        // {kind:'shop'|'item'|'team', idx}
-let speed = 1, skipping = false, battleBusy = false;
+let speed = 1, skipping = false, battleBusy = false, lastGhost = false;
 
 const imgSrc = (id, alt) => { const d = UNITS[id]; const i = (alt && d.alt) ? d.alt : d.img; return i ? `assets/units/${i.includes('.') ? i : i + '.png'}` : null; };
 const itemArt = (id, cls = '') => { const it = ITEMS[id]; return it.img ? `<img class="iimg ${cls} ${it.fit === 'contain' ? 'contain' : it.fit === 'logo' ? 'logo' : it.fit === 'whole' ? 'whole' : ''}" src="assets/items/${it.img}" alt="">` : it.icon; };
@@ -94,6 +94,7 @@ function startTurn() {
 
 // ---------------- the final wave (endless mode, after 104 kills) ----------------
 function bossChoice() {
+  ACH.unlock('finalboss');
   const boss = buildBossTeam();
   openModal(`<div class="boss-box">
     <h2 class="sd-title">final wave</h2>
@@ -107,7 +108,7 @@ function bossChoice() {
   $('#modal-close').classList.add('hidden');
   const row = $('#boss-team'); boss.forEach(u => { u.lvl = levelOf(u.exp); row.appendChild(cardEl(u)); });
   $('#boss-keep').onclick = () => {
-    S.bossChosen = true; Audio2.play('click');
+    S.bossChosen = true; Audio2.play('click'); ACH.unlock('keeporrebuild');
     if (!S.keepBonusGiven) {
       // the final wave bonus for staying with your deck (once per run)
       S.keepBonusGiven = true;
@@ -122,7 +123,7 @@ function bossChoice() {
     closeModal(); saveRun(); renderShop();
   };
   $('#boss-new').onclick = () => {
-    S.bossChosen = true; S.rebuild = true;
+    S.bossChosen = true; S.rebuild = true; ACH.unlock('keeporrebuild');
     S.team = [null, null, null, null, null]; S.gold = REBUILD.gold; S.shop.units = []; S.shop.items = [];
     rollShop(true); sel = null; Audio2.play('start'); closeModal(); saveRun(); renderShop();
     toast('the veterans market is open');
@@ -185,6 +186,7 @@ function mergeInto(target, src) {
 
 function onLevelUp(u) {
   Audio2.play('levelup');
+  ACH.level(lvl(u));
   toast(`${UNITS[u.id].name} goes ssj (level ${lvl(u)})`);
   shopTrigger(u, 'levelUp');
   const t = Math.min(6, tierFor(S.turn) + 1);
@@ -240,6 +242,7 @@ function useItem(itemIdx, slot) {
   const it = ITEMS[entry.id];
   if (S.gold < itemCost(it)) return toast('not enough gold and you cry');
   S.gold -= itemCost(it); S.shop.items.splice(itemIdx, 1);
+  ACH.item(entry.id);
   if (it.kill) { shopKill(u); sel = null; saveRun(); renderShop(); return; }
   if (it.equip) { u.item = entry.id; toast(`${UNITS[u.id].name} equips ${it.name}`); }
   else { buffSrc = it.name; try { it.use(shopCtx(), u); } finally { buffSrc = null; } }
@@ -466,6 +469,7 @@ async function endTurn(forced) {
 
   const isBoss = !!S.boss;
   const opp = isBoss ? { name: 'nike inc. · the final wave', team: buildBossTeam() } : pickOpponent();
+  lastGhost = /^ghost/.test(opp.name);
   const seed = Math.floor(Math.random() * 1e9);
   const res = simulateBattle(S.team, opp.team, seed);
   setBattleBg(seed);
@@ -500,6 +504,7 @@ function applyFusions(list, side) {
     S.team[iJ] = null; S.team[iT] = null;
     S.team[at] = newUnit('jahntonner', { atk: f.atk, hp: f.hp, exp: f.exp, item: f.item });
     try { localStorage.setItem('np_secret_jahn', '1'); } catch (e) {}
+    ACH.unlock('jahntonner');
     toast('tanner john and john tanner fused into jahn tonner');
   });
 }
@@ -571,6 +576,7 @@ function planDeathSounds(frames, opts) {
 function playDeathSounds(list) {
   for (const x of list) {
     if (x === 'synth') { Audio2.play('faint'); continue; }
+    ACH.heard(x.path);
     if (x.stopMusic) Audio2.stopMusic();
     if (x.exclusive) { Audio2.stopSfx(); Audio2.playFile(x.path, { exclusive: true, force: true }); }
     else Audio2.playFile(x.path);
@@ -588,6 +594,7 @@ async function playBattle(frames, opts = {}) {
     prev = f;
   }
   if (prev) { try { renderBattleTeams(prev); } catch (e) { console.error(e); } }
+  try { ACH.frames(frames); } catch (e) { console.error(e); }
   await sleep(500);
 }
 
@@ -599,7 +606,7 @@ async function playResultTheme(result, sudden) {
   await Audio2.sfxDone();
   if (tok !== themeToken) return; // the next round's music already started
   const list = result === 'win' ? MANIFEST.win : result === 'lose' ? MANIFEST.lose : [];
-  if (list.length) Audio2.playSong(pick(list), false);
+  if (list.length) { const song = pick(list); Audio2.playSong(song, false); ACH.theme(song); }
   else Audio2.play(result === 'win' ? 'win' : result === 'lose' ? 'lose' : 'click');
 }
 
@@ -652,6 +659,7 @@ function finishBattle(result, isBoss) {
   if (result === 'win') { S.wins++; sub = S.endless ? `${S.wins} trophies` : `${S.wins}/${WIN_TARGET} trophies`; }
   else if (result === 'lose') { S.lives--; sub = `${S.lives} lives left`; }
   else { sub = 'nobody wins. untied ends.'; }
+  ACH.afterBattle(result, { wins: S.wins, lives: S.lives, startLives: START_LIVES, endless: S.endless, boss: isBoss, rebuild: S.rebuild, ghost: lastGhost });
   // endless: 104 kills open the final wave
   let note = '';
   if (S.endless) {
@@ -718,13 +726,14 @@ function endRun(kind, boss) {
 
 // ---------------- modals ----------------
 function openModal(html, opts = {}) {
+  ACH.stop();
   $('#modal-body').innerHTML = html;
   $('#modal').classList.remove('hidden');
   $('#modal-close').classList.remove('hidden');
   $('#modal .modal-box').classList.toggle('compact', !!opts.compact);
   syncVolume();
 }
-function closeModal() { $('#modal').classList.add('hidden'); if (!S) toTitle(); }
+function closeModal() { ACH.stop(); $('#modal').classList.add('hidden'); if (!S) toTitle(); }
 
 function howToPlay() {
   openModal(`<h2>how to play</h2>
@@ -870,6 +879,8 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#btn-online').onclick = onlineMenu;
   $('#btn-units').onclick = codex;
   $('#btn-items').onclick = itemsCodex;
+  $('#btn-ach').onclick = () => ACH.open();
+  ACH.init();
   $('#modal-close').onclick = closeModal;
   $('#btn-roll').onclick = roll;
   $('#btn-freeze').onclick = toggleFreeze;
