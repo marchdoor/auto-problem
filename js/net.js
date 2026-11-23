@@ -277,6 +277,7 @@ const NET = {
     $('#b-lives').textContent = S.lives; $('#b-wins').textContent = S.wins; $('#b-turn').textContent = S.turn;
     skipping = false;
     this.lastSudden = !!bt.sudden;
+    if (bt.sudden && !CUT.sd) CUT.openSudden();
     this.lastGhost = mineIsA && /^ghost/.test(bt.nameB || '');
     await playBattle(frames, { result, seed: bt.seed, sudden: bt.sudden });
     S.nikeKills += mineIsA ? res.stats.cloneKills : res.stats.killsA;
@@ -473,6 +474,7 @@ Object.assign(NET, {
     $('#b-lives').textContent = S.lives; $('#b-wins').textContent = S.wins; $('#b-turn').textContent = S.turn;
     this.sdShowTeams(m);
     showCaption('sudden death. its over when i say its over');
+    if (!CUT.sd) CUT.openSudden();
     this.sdPanel(`<div class="sd-head"><b class="sd-title-sm">sudden death</b><span class="sd-timer" id="sd-timer"></span></div>
       <p>card bans only happen if <b>both</b> players choose them, otherwise it's buff removal.</p>
       <div class="sd-choices">

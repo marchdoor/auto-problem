@@ -21,10 +21,10 @@ const ACH_LIST = [
   { id: 'noproblem', cat: 'sounds', tier: 'red', name: 'no problem x2', img: 'units/noproblem.png', secret: true,
     desc: 'no problem gets his 2nd kill in one battle. the sound plays alone, and only once.',
     hint: 'let no problem fight. he has a sound for his 2nd kill.', sound: SPX + 'deathsfxnoproblem2killsplus.mp3' },
-  { id: 'sudden', cat: 'sounds', tier: 'silver', name: 'sudden death', img: 'units/venom.png', secret: true,
+  { id: 'sudden', cat: 'sounds', tier: 'silver', name: 'sudden death', img: 'units/venom.png', secret: true, video: 'sudden',
     desc: 'reach sudden death in an online game: two players left, both on their last life.',
     hint: 'an online game can end in sudden death.', sound: 'assets/music/suddendeath.mp3' },
-  { id: 'suddenlast', cat: 'sounds', tier: 'silver', name: 'last death', img: 'units/criminal.png', secret: true,
+  { id: 'suddenlast', cat: 'sounds', tier: 'silver', name: 'last death', img: 'units/criminal.png', secret: true, video: 'suddenlast',
     desc: 'the last death of a sudden death battle. everything else goes quiet.',
     hint: 'finish a sudden death battle.', sound: SPX + 'suddendeathlastdeathsfx.mp3' },
   { id: 'negev', cat: 'sounds', tier: 'red', name: 'negev', img: 'items/negev.png', secret: true,
@@ -240,7 +240,7 @@ const ACH = {
         const done = !!d.done[a.id], hide = a.secret && !done;
         let extra = '';
         if (a.themes || (a.sound && done)) extra = this.playerHTML(a);
-        if (a.video && done) extra = `<div class="ach-vid"><video preload="metadata" muted playsinline src="${CUTSCENES[a.video].src}#t=1"></video><button class="ach-watch" data-key="${a.video}">▶ watch again</button></div>`;
+        if (a.video && done) extra += `<div class="ach-vid"><video preload="metadata" muted playsinline src="${CUTSCENES[a.video].src}#t=1"></video><button class="ach-watch" data-key="${a.video}">▶ watch again</button></div>`;
         if (a.unit) extra = `<div class="ach-card${done ? '' : ' locked'}" data-unit="${a.unit}"></div>`;
         if (!done && a.items) { const n = d.items.length, t = Object.keys(ITEMS).length; extra = `<div class="ach-prog"><i style="width:${100 * n / t}%"></i></div><div class="ach-n">${n}/${t} items used</div>`; }
         if (!done && a.chaos) extra = `<div class="ach-prog"><i style="width:${100 * d.chaos.length / 6}%"></i></div><div class="ach-n">${d.chaos.length}/6 effects seen</div>`;

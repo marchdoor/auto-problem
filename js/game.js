@@ -551,7 +551,7 @@ function planDeathSounds(frames, opts) {
 
   if (opts.sudden) {
     deaths.forEach(d => { if (d !== last) add(d.i, 'synth'); });
-    add(last.i, { path: SPECIAL.suddenLast, stopMusic: true });
+    add(last.i, { path: SPECIAL.suddenLast, stopMusic: true, video: !!CUT.sd });
     return plan;
   }
   // every death: a random death sound (they stack)
@@ -579,6 +579,7 @@ function playDeathSounds(list) {
     if (x === 'synth') { Audio2.play('faint'); continue; }
     ACH.heard(x.path);
     if (x.stopMusic) Audio2.stopMusic();
+    if (x.video && CUT.lastDeath()) continue;   // the last death video has its own sound
     if (x.exclusive) { Audio2.stopSfx(); Audio2.playFile(x.path, { exclusive: true, force: true }); }
     else Audio2.playFile(x.path);
   }
@@ -589,11 +590,27 @@ async function playBattle(frames, opts = {}) {
   const plan = planDeathSounds(frames, opts);
   const replaceSynth = MANIFEST.death.length > 0 || !!opts.sudden;
   // john tanner vs the vodafone ceo: a cutscene when they meet front to front
-  let cut = null; try { cut = skipping ? null : CUT.plan(frames); } catch (e) { console.error(e); }
+  let cut = null; try { cut = (skipping || opts.sudden) ? null : CUT.plan(frames); } catch (e) { console.error(e); }
+  // online sudden death: the battle is timed so it ends exactly when the sudden death song ends.
+  // The time left in the song is read the moment the battle starts. Every frame then gets a share
+  // of what is left, and it re-adjusts as it goes.
+  let syncEnd = null, w = null, fixedL = null, wSum = null, fSum = null;
+  const savedSpeed = speed;
+  if (opts.sudden && CUT.sd && !skipping) {
+    const n = frames.length;
+    w = frames.map((f, i) => i === 0 ? 1100 : 720); w[n - 1] = 0;          // the last frame has no wait: the song ends with it
+    fixedL = frames.map(f => (f.fx.some(x => x.type === 'faint') ? 280 : 0) + (f.fx.some(x => x.type === 'attack') ? 170 : 0));
+    wSum = new Array(n + 1).fill(0); fSum = new Array(n + 1).fill(0);
+    for (let j = n - 1; j >= 0; j--) { wSum[j] = wSum[j + 1] + w[j]; fSum[j] = fSum[j + 1] + fixedL[j]; }
+    let rem = (Audio2.songLen() - Audio2.songPos()) * 1000;
+    if (rem < fSum[0] + 0.25 * wSum[0]) rem += Audio2.songLen() * 1000;   // too little song left: end with the next loop
+    syncEnd = Date.now() + rem; speed = 1;
+  }
   for (let i = 0; i < frames.length; i++) {
     const f = frames[i];
-    if (skipping) { if (CUT.active) CUT.close(true); prev = f; continue; }
+    if (skipping) { if (CUT.active && !CUT.sd) CUT.close(true); prev = f; continue; }
     let hold, closeCut = false;
+    if (syncEnd) hold = wSum[i] > 0 ? Math.max(40, (syncEnd - Date.now() - fSum[i]) * w[i] / wSum[i]) : 0;
     if (cut && i === cut.k) {
       // the video plays while they stand face to face. The frames up to the death are stretched,
       // so the loser dies right as the video ends.
@@ -603,14 +620,16 @@ async function playBattle(frames, opts = {}) {
         else cut.hold = Math.max(350, (total - 300 - 170 * n) / n);
       } else cut = null;
     }
-    if (cut && CUT.active) { if (i >= cut.k && i < cut.d && cut.hold) hold = cut.hold; if (i === cut.d) closeCut = true; }
+    if (cut && CUT.active && !syncEnd) { if (i >= cut.k && i < cut.d && cut.hold) hold = cut.hold; if (i === cut.d) closeCut = true; }
     try { await playFrame(f, prev, i, plan[i], replaceSynth, hold, closeCut); } catch (e) { console.error('battle frame', i, e); }
     prev = f;
   }
-  if (CUT.active) CUT.close(true);
+  if (syncEnd) speed = savedSpeed;
+  if (opts.sudden && CUT.sd) { Audio2.stopMusic(); CUT.lastDeath(); }   // skipped, or the last death never fired
+  else if (CUT.active && !CUT.sd) CUT.close(true);
   if (prev) { try { renderBattleTeams(prev); } catch (e) { console.error(e); } }
   try { ACH.frames(frames); } catch (e) { console.error(e); }
-  await sleep(500);
+  if (!syncEnd) await sleep(500);
 }
 
 // after the battle: wait for every death sound, then the win or lose theme
@@ -659,7 +678,7 @@ async function playFrame(f, prev, i, deathSounds, replaceSynthFaint, hold, close
     f.fx.filter(x => x.type === 'ban').forEach(x => { const el = document.querySelector(`#battle .card[data-uid="${x.uid}"]`); if (el) el.classList.add('banned'); });
     if ((f.sfx || []).includes('nuke')) { const fl = document.createElement('div'); fl.className = 'flash'; $('#app').appendChild(fl); setTimeout(() => fl.remove(), 600); }
     if (f.cap) showCaption(f.cap);
-    if (hold) await CUT.wait(hold); else await sleep(i === 0 ? 1100 : 720);
+    if (hold != null) await CUT.wait(hold); else await sleep(i === 0 ? 1100 : 720);
   }
 }
 
@@ -857,6 +876,7 @@ function menu() {
 
 // ---------------- title ----------------
 function toTitle() {
+  CUT.close(true);
   cancelTheme();
   setEndless(false);
   showScreen('title');

@@ -10,6 +10,8 @@ const CUTSCENES = {
   johnwin: { src: 'assets/cutscenes/johnvsvodafoneceo_johnwin.mp4', dur: 8.65, ach: 'cut_john', title: 'john tanner vs woto tolff' },
   vodafonewin: { src: 'assets/cutscenes/johnvsvodafoneceo_vodafonewin.mp4', dur: 8.65, ach: 'cut_vodafone', title: 'woto tolff vs john tanner' },
 };
+CUTSCENES.sudden = { src: 'assets/cutscenes/suddendeathvideo.mp4', dur: 58.7, ach: 'sudden', title: 'sudden death' };
+CUTSCENES.suddenlast = { src: 'assets/cutscenes/suddendeathlastdeathsfxVIDEO.mp4', dur: 10.4, ach: 'suddenlast', title: 'last death' };
 const DUCK_LEVEL = 0.15;   // other sounds keep 15% (85% quieter) while the video plays
 
 const CUT = {
@@ -62,6 +64,7 @@ const CUT = {
     const el = this.el; if (!el) return;
     const v = this.v, key = this.key, seen = this.seen;
     this.el = null; this.v = null; this.active = false;
+    if (this.sd) { clearInterval(this.sd.timer); this.sd = null; }
     Audio2.setDuck(1, fast ? 150 : 1100);
     if (seen && key) ACH.unlock(CUTSCENES[key].ach);
     if (fast) { try { v.pause(); } catch (e) {} el.remove(); return; }
@@ -70,6 +73,46 @@ const CUT = {
     const t0 = Date.now(), v0 = v.volume;
     const fade = setInterval(() => { const k = Math.min(1, (Date.now() - t0) / 500); try { v.volume = v0 * (1 - k); } catch (e) {} if (k >= 1) { clearInterval(fade); try { v.pause(); } catch (e) {} } }, 40);
     setTimeout(() => el.remove(), 760);
+  },
+
+  // ---- sudden death (online): the video plays muted, kept in step with the song ----
+  sd: null,
+  openSudden() {
+    this.close(true);
+    const c = CUTSCENES.sudden;
+    const el = document.createElement('div');
+    el.className = 'pip opening sd';
+    el.innerHTML = `<div class="pip-screen"><video playsinline preload="auto" loop muted></video><div class="pip-scan"></div><div class="pip-white"></div></div>
+      <div class="pip-bar"><i class="rec"></i><span>${c.title}</span></div>`;
+    document.getElementById('app').appendChild(el);
+    const v = el.querySelector('video');
+    v.muted = true; v.src = c.src;
+    this.el = el; this.v = v; this.active = true; this.key = 'sudden'; this.seen = false;
+    const sync = (force) => {
+      if (!v.duration) return;
+      const want = Audio2.songPos() % v.duration, diff = Math.abs(v.currentTime - want);
+      if ((force || diff > 0.3) && diff < v.duration - 0.3) v.currentTime = want;
+    };
+    v.addEventListener('loadedmetadata', () => { sync(true); v.play().catch(() => {}); }, { once: true });
+    v.play().catch(() => {});
+    v.addEventListener('playing', () => { this.seen = true; }, { once: true });
+    this.sd = { timer: setInterval(() => sync(false), 400) };
+    // have the last death video ready
+    this.preLast = document.createElement('video'); this.preLast.preload = 'auto'; this.preLast.src = CUTSCENES.suddenlast.src;
+  },
+  // the battle is over: the picture changes to the last death video (with its own sound), then the player turns off
+  lastDeath() {
+    if (!this.sd || !this.el) return false;
+    clearInterval(this.sd.timer); this.sd = null;
+    const v = this.v, c = CUTSCENES.suddenlast;
+    v.loop = false; v.src = c.src; v.muted = Audio2.muted; v.volume = Math.min(1, Audio2.volume / 0.6);
+    this.el.querySelector('.pip-bar span').textContent = c.title;
+    this.key = 'suddenlast'; this.seen = false;
+    v.addEventListener('playing', () => { this.seen = true; }, { once: true });
+    v.play().catch(() => {});
+    v.addEventListener('ended', () => { if (this.v === v) this.close(); }, { once: true });
+    setTimeout(() => { if (this.v === v) this.close(); }, (c.dur + 2) * 1000);   // never get stuck
+    return true;
   },
 
   watch(key) { ACH.stop(); this.open(key, true); },

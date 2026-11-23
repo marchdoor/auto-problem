@@ -115,7 +115,7 @@ Object.assign(Audio2, {
   active: new Set(), exclusiveUntil: 0, songPath: null,
   playSong(path, loop = true) {
     if (!path || this.songPath === path) return;
-    this.songPath = path; this.musicName = null;
+    this.songPath = path; this.musicName = null; this.songT0 = Date.now();
     if (this.music) { this.music.pause(); this.music = null; }
     const a = new Audio(encodePath(path));
     a.loop = loop; a.volume = this.volume * 0.5 * this.duck; this.music = a;
@@ -141,6 +141,13 @@ Object.assign(Audio2, {
       if (a && !this.muted && a.paused) { const p = a.play(); if (p && p.catch) p.catch(() => this.armMusicUnlock()); }
     };
     evs.forEach(e => document.addEventListener(e, go, true));
+  },
+  // where the current song is (seconds), and how long it is. Used to sync the sudden death video and battle.
+  songLen() { const d = this.music && this.music.duration; return isFinite(d) && d > 1 ? d : 58.71; },
+  songPos() {
+    const m = this.music;
+    if (m && !m.paused && m.currentTime > 0) return m.currentTime % this.songLen();
+    return ((Date.now() - (this.songT0 || Date.now())) / 1000) % this.songLen();   // song not audible (muted): use the clock
   },
   stopMusic() { if (this.music) { this.music.pause(); this.music = null; } this.songPath = null; this.musicName = null; },
   // play a sound file; sounds stack unless one marked exclusive is playing

@@ -637,3 +637,5 @@ body.endless .wins-max { display: none; }
 .dev-grid { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; }
 .dev-check { display: flex; gap: 8px; align-items: center; margin: 6px 0; font-size: 14px; }
 @media (max-width: 760px) { .dev-form .dv-search { width: 100%; } .dev-form select { max-width: 100%; } }
+
+.pip.sd { bottom: auto; top: 64px; }
