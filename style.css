@@ -439,3 +439,30 @@ html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparen
 /* keep the bottom buttons clear of phone home bars / notches */
 .controls { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 @media (max-width: 760px) { .controls { padding-bottom: max(12px, env(safe-area-inset-bottom)); } .board { min-height: 0; } }
+
+/* ============================================================
+   PHONE BOTTOM MARGIN: phone browsers can hide the bottom of the page
+   behind their toolbar, so every screen gets 200px of space at the
+   bottom and scrolls when the content is taller than the screen.
+   ============================================================ */
+@media (max-width: 760px) {
+  .screen { padding-bottom: 200px; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+  .screen > * { flex-shrink: 0; }
+  .screen .hud { position: sticky; top: 0; z-index: 8; }
+  .board { flex: none; overflow: visible; }
+  .arena { flex: none; min-height: 0; }
+  #title { justify-content: flex-start; }
+  .title-box { margin-top: auto; margin-bottom: auto; }
+  .overlay { padding: 12px 0 200px; box-sizing: border-box; }
+  .modal-box { max-height: 100%; }
+  .result-box { max-height: 100%; overflow-y: auto; }
+  .toast { bottom: auto; top: 120px; }
+}
+/* phones held sideways have much less height: smaller margin, same scrolling */
+@media (max-height: 520px) and (min-width: 561px) {
+  .screen { padding-bottom: 60px; overflow-y: auto; overflow-x: hidden; }
+  .screen > * { flex-shrink: 0; }
+  .screen .hud { position: sticky; top: 0; z-index: 8; }
+  .overlay { padding: 8px 0 60px; box-sizing: border-box; }
+  .modal-box, .result-box { max-height: 100%; overflow-y: auto; }
+}
