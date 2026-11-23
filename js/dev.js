@@ -159,12 +159,22 @@ const DEV = {
   tabTools(body) {
     body.innerHTML = `<label class="dev-check"><input type="checkbox" id="dv-ach" ${this.ach ? 'checked' : ''}> achievements unlock while dev mode is on</label>
       <div class="dev-form"><button id="dv-unlock">unlock all achievements</button><button id="dv-lock">reset achievements</button></div>
+      <div class="dev-form"><button id="dv-sd" class="big">simulate sudden death</button></div>
+      <p class="t">sudden death: starts the sudden death song in the shop. when you press end turn the video opens, the ban phase is skipped, and the battle is timed to the end of the song, then the last death video plays. the opponent is your dev opponent if you made one.</p>
       <div class="dev-form"><button id="dv-cut1">play cutscene: john wins</button><button id="dv-cut2">play cutscene: vodafone wins</button></div>
       <div class="dev-form"><button id="dv-off" class="danger">turn dev mode off</button></div>
       <p class="t">dev mode switches itself off in online games. tap the title 7 times (or Ctrl+Alt+D) to turn it on or off.</p>`;
     $('#dv-ach').onchange = e => { this.ach = e.target.checked; };
     $('#dv-unlock').onclick = () => { const d = ACH.load(); ACH_LIST.forEach(a => { if (!d.done[a.id]) d.done[a.id] = Date.now(); }); ACH.save(); ACH.refreshButton(); this.flash('all achievements unlocked'); };
     $('#dv-lock').onclick = () => { ACH.data = { done: {}, themes: [], items: [], chaos: [] }; ACH.save(); ACH.refreshButton(); this.flash('achievements reset'); };
+    $('#dv-sd').onclick = () => {
+      if (!S) newRun(false);
+      closeModal(); showScreen('shop'); renderShop();
+      Audio2.stopMusic(); Audio2.playSong('assets/music/suddendeath.mp3');
+      this.sdSim = true;
+      $('#hud-sd').classList.remove('hidden'); $('#hud-sd').textContent = '☠ sudden death (simulated)';
+      toast('sudden death shop. put a team together and press end turn');
+    };
     $('#dv-cut1').onclick = () => { $('#modal').classList.add('hidden'); CUT.watch('johnwin'); };
     $('#dv-cut2').onclick = () => { $('#modal').classList.add('hidden'); CUT.watch('vodafonewin'); };
     $('#dv-off').onclick = () => { this.set(false); closeModal(); };

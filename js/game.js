@@ -473,17 +473,23 @@ async function endTurn(forced) {
   lastGhost = /^ghost/.test(opp.name);
   const seed = Math.floor(Math.random() * 1e9);
   const res = simulateBattle(S.team, opp.team, seed);
+  const sdSim = typeof DEV !== 'undefined' && DEV.sdSim; if (sdSim) DEV.sdSim = false;   // dev: simulated sudden death
   setBattleBg(seed);
   showScreen('battle');
-  phaseSong('battle');
+  if (!sdSim) phaseSong('battle');
   $('#enemy-name').textContent = opp.name;
   $('#b-lives').textContent = S.lives; $('#b-wins').textContent = S.wins; $('#b-turn').textContent = S.turn;
   skipping = false;
-  await playBattle(res.frames, { result: res.result, seed });
+  if (sdSim) {
+    // like the online flow: the video opens when the shop ends, a pause for the ban phase, then the timed battle
+    CUT.openSudden(); showCaption('sudden death (simulated). the ban phase is skipped'); $('#hud-sd').classList.add('hidden');
+    await new Promise(r => setTimeout(r, 4000));
+  }
+  await playBattle(res.frames, { result: res.result, seed, sudden: sdSim });
   applyFusions(res.fusions, 'A');
 
   S.nikeKills += res.stats.cloneKills;
-  finishBattle(res.result, isBoss);
+  finishBattle(res.result, isBoss, sdSim);
 }
 
 // one background per battle. The same seed gives the same picture, so both
@@ -687,7 +693,7 @@ function showCaption(t) {
   c.style.opacity = 1;
 }
 
-function finishBattle(result, isBoss) {
+function finishBattle(result, isBoss, sudden) {
   battleBusy = false;
   const caps = CAPTIONS[result];
   let sub = '';
@@ -701,7 +707,7 @@ function finishBattle(result, isBoss) {
     if (!S.boss && S.nikeKills >= 104) { S.boss = true; note = ' · 104 dead. 1 to go. the final wave is next'; }
     else if (!S.boss) note = ` · ${S.nikeKills} dead, ${104 - S.nikeKills} to go`;
   }
-  playResultTheme(result);
+  playResultTheme(result, sudden);
   S.history.push(result);
   setColour();
   $('#result-title').textContent = result === 'win' ? 'win' : result === 'lose' ? 'lose' : 'draw';
