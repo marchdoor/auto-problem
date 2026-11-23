@@ -21,7 +21,7 @@ Press **play online**. One person hosts and gets a 4-letter room code, and up to
 - Start it from **endless run** on the title screen, or after winning 10 trophies in a normal run (you can end the run with a win, or keep going).
 - Levels keep growing (level 3 at 5 merges, then +1 level per 3 merges) and the stat cap goes from 50 to 150.
 - "nike inc status" counts every enemy unit your team kills. At 104 dead, the **final wave** is next: Giuseppe and the Nike Inc. militia.
-- Before the final wave you choose: **keep** your team (every unit gets +30/+30 and +5 levels, once per run, then a normal 10-gold shop) or **rebuild**: sell the team, get 60 gold and a veterans market (tier 5-6 characters at level 4 with +50/+50).
+- Before the final wave you choose: **keep** your team (every unit gets +30/+30 and +5 levels, once per run, then a normal 10-gold shop) or **rebuild**: sell the team, get 100 gold and a veterans market (tier 5-6 characters at level 4 with +50/+50).
 - Clones can go past 5 units on the field (up to 10 per side). Giuseppe creatore also calls his clones when he falls.
 - Beat the final wave to win. Lose and you lose a life and face it again.
 - Tuning knobs, both in `js/engine.js`: `BOSS` (the boss team's stats and level), `KEEP_BONUS` (the keep bonus), `REBUILD` (gold, veteran bonus and level) and `MAX_FIELD` (units per side).
