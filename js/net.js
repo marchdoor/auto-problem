@@ -182,6 +182,7 @@ const NET = {
     } else this.hostNextTurn();
   },
   broadcast(m) {
+    if (this.isHost && (m.t === 'lobby' || m.t === 'turn')) m.packs = this.packs || packPrefs();
     Object.values(this.conns).forEach(c => { try { c.send(m); } catch (e) {} });
     this.onMessage(m); // host is a player too
   },
@@ -192,6 +193,7 @@ const NET = {
 
   // ---------- every player ----------
   onMessage(m) {
+    if (m.packs) this.packs = m.packs;
     if (m.t === 'lobby') { this.lobbyPlayers = m.players; if (this.phase === 'lobby') this.showLobby(m.msg); else if (m.msg) toast(m.msg); }
     else if (m.t === 'error') this.fail(m.msg);
     else if (m.t === 'status') { $('#net-wait-count') && ($('#net-wait-count').textContent = `${m.ready}/${m.total} ready`); }
@@ -213,6 +215,7 @@ const NET = {
       S = { net: true, runId: 'net-' + this.myId, turn: 0, gold: START_GOLD, lives: NET_LIVES, wins: 0,
             team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [] };
     }
+    if (m.packs) { S.packs = m.packs; setPacks(m.packs); }
     if (!this.isHost) this.phase = 'shop';
     this.pendingTurn = m;
     // wait for the player to close the result screen first
@@ -245,7 +248,7 @@ const NET = {
   submitTeam() {
     clearInterval(this.timerInt);
     $('#hud-timer').textContent = '⏱ done';
-    const team = S.team.filter(Boolean).map(u => ({ id: u.id, atk: u.atk, hp: u.hp, exp: u.exp, item: u.item, uid: u.uid, buffs: u.buffs || [] }));
+    const team = S.team.filter(Boolean).map(u => ({ id: u.id, atk: u.atk, hp: u.hp, exp: u.exp, item: u.item, uid: u.uid, buffs: u.buffs || [], next: u.next || [] }));
     // open the waiting screen first: for the host, send() can immediately open the next screen
     openModal(`<div style="text-align:center"><h2>wait a bit</h2><p class="cap-style" style="font-size:24px">waiting for the other players</p><p id="net-wait-count"></p></div>`);
     $('#modal-close').classList.add('hidden');
@@ -282,6 +285,7 @@ const NET = {
     await playBattle(frames, { result, seed: bt.seed, sudden: bt.sudden });
     S.nikeKills += mineIsA ? res.stats.cloneKills : res.stats.killsA;
     applyFusions(res.fusions, mineIsA ? 'A' : 'B');
+    applyTentLoss(res.tentLost, mineIsA ? 'A' : 'B');
     this.showResult(result, m.players);
   },
   standingsHTML(players) {
@@ -340,19 +344,25 @@ const NET = {
   // ---------- lobby UI ----------
   showLobby(msg) {
     const players = this.isHost ? this.publicPlayers() : (this.lobbyPlayers || []);
+    if (this.isHost && !this.packs) this.packs = Object.assign({}, packPrefs());
+    const pk = this.packs || {};
     openModal(`<h2>room <span class="room-code">${this.code}</span></h2>
       <p>${this.isHost ? 'send this code to your friends. they press <b>play online</b>, then <b>join</b>.' : 'connected. waiting for the host to start.'}</p>
       ${msg ? `<p class="cap-style">${msg}</p>` : ''}
       <ul class="lobby-list">${players.map(p => `<li>${p.name}${p.id === this.myId ? ' (you)' : ''}${p.id === NET_PREFIX + this.code ? ' 👑' : ''}</li>`).join('')}</ul>
+      <div class="lobby-packs">${Object.entries(PACKS).map(([k, p]) => this.isHost ? `<label class="pack"><input type="checkbox" data-pk="${k}" ${pk[k] ? 'checked' : ''}><span><b>${p.name}</b> <small>${p.text}</small></span></label>` : `<p class="t">${p.name}: <b>${pk[k] ? 'on' : 'off'}</b></p>`).join('')}</div>
       <p class="t">${players.length}/${MAX_PLAYERS} players · ${TURN_SECONDS}s per turn · ${NET_LIVES} lives · first to ${WIN_TARGET} wins or last one standing</p>
       <div style="display:flex;gap:12px">${this.isHost ? `<button class="big" id="net-start" ${players.length < 2 ? 'disabled' : ''}>start game</button>` : ''}<button id="net-leave">leave</button></div>`);
     $('#modal-close').classList.add('hidden');
-    if (this.isHost) $('#net-start').onclick = () => this.hostStart();
+    if (this.isHost) {
+      $('#net-start').onclick = () => this.hostStart();
+      document.querySelectorAll('.lobby-packs input').forEach(i => { i.onchange = () => { this.packs[i.dataset.pk] = i.checked; savePackPrefs(this.packs); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });
+    }
     $('#net-leave').onclick = () => this.leave();
   },
 };
 
-const netTeam = team => (team || []).map(u => ({ id: u.id, atk: u.atk, hp: u.hp, exp: u.exp, item: u.item, uid: u.uid }));
+const netTeam = team => (team || []).map(u => ({ id: u.id, atk: u.atk, hp: u.hp, exp: u.exp, item: u.item, uid: u.uid, next: u.next || [] }));
 
 function onlineMenu() {
   let name = ''; try { name = localStorage.getItem('np_name') || ''; } catch (e) {}

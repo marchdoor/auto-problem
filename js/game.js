@@ -73,7 +73,8 @@ function phaseSong(kind) {
 function newRun(endless = false) {
   setEndless(endless);
   S = { runId: Date.now() + '-' + Math.floor(Math.random() * 1e6), turn: 1, gold: START_GOLD, lives: START_LIVES, wins: 0,
-        team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [], endless: !!endless };
+        team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [], endless: !!endless, packs: packPrefs(), curses: [] };
+  setPacks(S.packs);
   rollShop(true);
   S.playlist = newPlaylist();
   saveRun();
@@ -83,6 +84,7 @@ function newRun(endless = false) {
 
 function startTurn() {
   S.turn++; S.gold = START_GOLD;
+  S.team.forEach(u => { if (u) u.next = null; });   // food side effects only last one battle
   rollShop(true);
   S.team.filter(Boolean).forEach(u => shopTrigger(u, 'startTurn'));
   S.rebuild = false; S.bossChosen = false;
@@ -138,17 +140,23 @@ function shopSizes() {
 // a shop character: normal, or a veteran in the final wave's rebuild shop
 function shopUnit(tier) {
   if (S.rebuild) {
-    const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier >= REBUILD.minTier);
+    const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier >= REBUILD.minTier && packOk(UNITS[k]));
     return mkVeteran(pick(pool));
   }
   return newUnit(randomUnitId(tier));
 }
 function randomUnitId(maxTier) {
-  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier <= maxTier);
+  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier <= maxTier && packOk(UNITS[k]));
   return pick(pool);
 }
 function randomItemId(maxTier) {
-  return pick(Object.keys(ITEMS).filter(k => ITEMS[k].tier <= maxTier));
+  return pick(Object.keys(ITEMS).filter(k => ITEMS[k].tier <= maxTier && packOk(ITEMS[k])));
+}
+// a shop item. food gets a random freshness (1-100%)
+function newItemEntry(tier) {
+  const id = randomItemId(tier), e = { id, frozen: false };
+  if (ITEMS[id].food) e.pct = 1 + Math.floor(Math.random() * 100);
+  return e;
 }
 function rollShop(free) {
   const tier = tierFor(S.turn), n = shopSizes();
@@ -156,7 +164,7 @@ function rollShop(free) {
   const units = keptU.slice(0, Math.max(n.units, keptU.length));
   while (units.length < n.units) units.push({ u: shopUnit(tier), frozen: false });
   const items = keptI.slice();
-  while (items.length < n.items) items.push({ id: randomItemId(tier), frozen: false });
+  while (items.length < n.items) items.push(newItemEntry(tier));
   S.shop.units = units; S.shop.items = items;
 }
 
@@ -190,7 +198,7 @@ function onLevelUp(u) {
   toast(`${UNITS[u.id].name} goes ssj (level ${lvl(u)})`);
   shopTrigger(u, 'levelUp');
   const t = Math.min(6, tierFor(S.turn) + 1);
-  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier === t);
+  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier === t && packOk(UNITS[k]));
   if (S.shop.units.length < 8) S.shop.units.push({ u: S.rebuild ? shopUnit(6) : newUnit(pick(pool)), frozen: false });
 }
 
@@ -245,7 +253,14 @@ function useItem(itemIdx, slot) {
   ACH.item(entry.id);
   if (it.kill) { shopKill(u); sel = null; saveRun(); renderShop(); return; }
   if (it.equip) { u.item = entry.id; toast(`${UNITS[u.id].name} equips ${it.name}`); }
-  else { buffSrc = it.name; try { it.use(shopCtx(), u); } finally { buffSrc = null; } }
+  else {
+    const times = u.item === 'chef' ? 2 : 1;   // chef skill: food and buffs work twice
+    for (let k = 0; k < times; k++) {
+      if (it.food) applyFood(shopCtx(), u, entry.id, entry.pct == null ? 100 : entry.pct).forEach(t => toast(t));
+      else { buffSrc = it.name; try { it.use(shopCtx(), u); } finally { buffSrc = null; } }
+    }
+    if (times > 1) toast('chef skill: it works twice');
+  }
   Audio2.play('item');
   sel = null; saveRun(); renderShop();
 }
@@ -320,6 +335,7 @@ function cardEl(u, opts = {}) {
     </div>
     ${u.item ? `<div class="itm" title="${ITEMS[u.item].name}">${itemArt(u.item)}</div>` : ''}
     ${u.debuffNote ? `<div class="dbf" title="${u.debuffNote}">−</div>` : ''}
+    ${u.bleed ? '<div class="bleedtag" title="bleeding"><img src="assets/items/bleed.png" alt=""></div>' : ''}${u.psn ? '<div class="psntag" title="poisoned">🧪</div>' : ''}${u.next && u.next.length ? `<div class="nexttag" title="${u.next.map(t => NEXT_TXT[t]).join('; ')}">🤢</div>` : ''}
     ${u.bomb ? `<div class="bombtag" title="rebook nuke">💣${u.bomb}</div>` : ''}
     <div class="stats"><div class="badge atk">${u.atk}</div><div class="badge hp">${u.hp}</div></div>
     <div class="lvl">lvl ${L} ${pips}</div>`;
@@ -330,16 +346,16 @@ function itemEl(entry, isSel) {
   const it = ITEMS[entry.id];
   const el = document.createElement('div');
   el.className = 'item-card' + (isSel ? ' sel' : '') + (entry.frozen ? ' frozen' : '');
-  el.innerHTML = `<div class="ipic">${itemArt(entry.id)}</div><div class="inm">${it.name}</div>`;
+  el.innerHTML = `<div class="ipic">${itemArt(entry.id)}</div><div class="inm">${it.name}${entry.pct != null ? ` ${entry.pct}%` : ''}</div>`;
   return el;
 }
 
-function infoFor(u, isItem) {
+function infoFor(u, isItem, pct) {
   const box = $('#info');
   if (!u) { box.innerHTML = `<div class="info-empty">tap a character to see what they do. tap a shop card, then a team slot to buy (on PC you can also drag).</div>`; return; }
   if (isItem) {
     const it = ITEMS[u];
-    box.innerHTML = `<div class="info-icon">${itemArt(u)}</div><div><h3>${it.name}</h3><div class="t">item · tier ${it.tier} · ${itemCost(it)}🪙</div><div class="ab">${it.text}</div></div>`;
+    box.innerHTML = `<div class="info-icon">${itemArt(u)}</div><div><h3>${it.name}</h3><div class="t">item · tier ${it.tier} · ${itemCost(it)}🪙</div><div class="ab">${it.food ? foodText(u, pct == null ? 100 : pct) : it.text}</div></div>`;
     return;
   }
   const d = UNITS[u.id], L = levelOf(u.exp || 0);
@@ -397,14 +413,14 @@ function renderShop() {
     el.draggable = true;
     el.addEventListener('dragstart', ev => { sel = { kind: 'item', idx: i }; ev.dataTransfer.setData('text', 'x'); });
     el.addEventListener('click', () => { sel = sel && sel.kind === 'item' && sel.idx === i ? null : { kind: 'item', idx: i }; Audio2.play('click'); renderShop(); });
-    el.addEventListener('mouseenter', () => { if (!sel) infoFor(e.id, true); });
+    el.addEventListener('mouseenter', () => { if (!sel) infoFor(e.id, true, e.pct); });
     si.appendChild(el);
   });
 
   // info + buttons
   if (sel) {
     if (sel.kind === 'shop') infoFor(S.shop.units[sel.idx] && S.shop.units[sel.idx].u);
-    else if (sel.kind === 'item') infoFor(S.shop.items[sel.idx] && S.shop.items[sel.idx].id, true);
+    else if (sel.kind === 'item') infoFor(S.shop.items[sel.idx] && S.shop.items[sel.idx].id, true, S.shop.items[sel.idx] && S.shop.items[sel.idx].pct);
     else infoFor(S.team[sel.idx]);
   } else infoFor(null);
   $('#btn-sell').disabled = !(sel && sel.kind === 'team');
@@ -472,7 +488,8 @@ async function endTurn(forced) {
   const opp = (typeof DEV !== 'undefined' && DEV.opponent()) || (isBoss ? { name: 'nike inc. · the final wave', team: buildBossTeam() } : pickOpponent());
   lastGhost = /^ghost/.test(opp.name);
   const seed = Math.floor(Math.random() * 1e9);
-  const res = simulateBattle(S.team, opp.team, seed);
+  const res = simulateBattle(S.team, opp.team, seed, { curses: S.curses || [] });
+  S.curses = [];
   const sdSim = typeof DEV !== 'undefined' && DEV.sdSim; if (sdSim) DEV.sdSim = false;   // dev: simulated sudden death
   setBattleBg(seed);
   showScreen('battle');
@@ -487,6 +504,7 @@ async function endTurn(forced) {
   }
   await playBattle(res.frames, { result: res.result, seed, sudden: sdSim });
   applyFusions(res.fusions, 'A');
+  applyTentLoss(res.tentLost, 'A');
 
   S.nikeKills += res.stats.cloneKills;
   finishBattle(res.result, isBoss, sdSim);
@@ -513,6 +531,14 @@ function applyFusions(list, side) {
     try { localStorage.setItem('np_secret_jahn', '1'); } catch (e) {}
     ACH.unlock('jahntonner');
     toast('tanner john and john tanner fused into jahn tonner');
+  });
+}
+
+// make tent bro: the holder never came back because the rest of its team died first
+function applyTentLoss(list, side) {
+  (list || []).filter(x => x.side === side).forEach(x => {
+    const i = S.team.findIndex(u => u && u.uid === x.uid);
+    if (i >= 0) { toast(`${UNITS[S.team[i].id].name} never came back from the tent`); S.team[i] = null; }
   });
 }
 
@@ -690,6 +716,8 @@ async function playFrame(f, prev, i, deathSounds, replaceSynthFaint, hold, close
       else if (x.type === 'buff') { el.classList.add('buffed'); if (x.amt) { const sg = n => (n >= 0 ? '+' : '') + n; floatText(x.uid, `${sg(x.amt[0])}/${sg(x.amt[1])}`, x.amt[0] < 0 || x.amt[1] < 0 ? 'dmg' : 'buf'); } }
       else if (x.type === 'heal') { el.classList.add('buffed'); floatText(x.uid, '+' + x.amt + ' hp', 'buf'); }
       else if (x.type === 'debuff') el.classList.add('shake');
+      else if (x.type === 'bleed') { el.classList.add('shake'); floatText(x.uid, 'bleeding', 'dmg'); }
+      else if (x.type === 'poison') { el.classList.add('shake'); floatText(x.uid, 'poisoned', 'dmg'); }
       else if (x.type === 'summon') el.classList.add('summoned');
       else if (x.type === 'ability') el.classList.add('ability');
     }
@@ -812,7 +840,7 @@ function codex() {
   let html = `<h2>all characters</h2><div class="codex">`;
   let found = false; try { found = localStorage.getItem('np_secret_jahn') === '1'; } catch (e) {}
   for (let t = 1; t <= 7; t++) {
-    const list = Object.entries(UNITS).filter(([k, d]) => d.tier === t && !d.token && (!d.secret || found));
+    const list = Object.entries(UNITS).filter(([k, d]) => d.tier === t && !d.token && (!d.secret || found) && packOk(d));
     if (!list.length) continue;
     html += `<div class="codex-tier">tier ${t}</div>`;
     list.forEach(([k, d]) => {
@@ -826,11 +854,11 @@ function codex() {
 function itemsCodex() {
   let html = `<h2>all items</h2><p class="t">items cost ${ITEM_COST} gold in the shop unless it says otherwise. <b>equip</b> items stay on a character (one each), the others are used up.</p><div class="codex">`;
   for (let t = 1; t <= 6; t++) {
-    const list = Object.entries(ITEMS).filter(([k, it]) => it.tier === t);
+    const list = Object.entries(ITEMS).filter(([k, it]) => it.tier === t && packOk(it));
     if (!list.length) continue;
     html += `<div class="codex-tier">tier ${t}</div>`;
     list.forEach(([k, it]) => {
-      const kind = (it.equip ? 'equip · stays on the character' : it.team ? 'team item · used up' : it.kill ? 'kills a character · used up' : 'used up') + (it.cost && it.cost !== ITEM_COST ? ` · ${it.cost} gold` : '');
+      const kind = (it.food ? 'food · used up' : it.equip ? 'equip · stays on the character' : it.team ? 'team item · used up' : it.kill ? 'kills a character · used up' : 'used up') + (it.cost && it.cost !== ITEM_COST ? ` · ${it.cost} gold` : '');
       html += `<div class="entry"><div class="ipic-sm">${itemArt(k)}</div><div><h4>${it.name}</h4><div class="s">${kind}</div><div class="d">${it.text}</div></div></div>`;
     });
   }
@@ -896,6 +924,13 @@ function menu() {
 }
 
 // ---------------- title ----------------
+// character packs the next new run starts with (an online room uses the host's choice)
+function renderPackRow() {
+  const el = $('#pack-row'); if (!el) return;
+  const pr = packPrefs();
+  el.innerHTML = Object.entries(PACKS).map(([k, p]) => `<label class="pack"><input type="checkbox" data-pk="${k}" ${pr[k] ? 'checked' : ''}><span><b>${p.name}</b> <small>${p.text} applies to new runs.</small></span></label>`).join('');
+  el.querySelectorAll('input').forEach(i => { i.onchange = () => { const q = packPrefs(); q[i.dataset.pk] = i.checked; savePackPrefs(q); setPacks(q); }; });
+}
 function toTitle() {
   CUT.close(true);
   cancelTheme();
@@ -906,6 +941,7 @@ function toTitle() {
   // the menu song comes back at a random speed and pitch every time (medium: between about 0.72x and 1.4x, never close to normal)
   const sign = Math.random() < 0.5 ? -1 : 1, menuRate = Math.exp(sign * (0.15 + Math.random() * 0.19));
   Audio2.playSong('assets/music/menusong.mp3', true, menuRate);
+  setPacks(packPrefs()); renderPackRow();
   const col = $('#collage'); col.innerHTML = '';
   const ids = ['giuseppe', 'noproblem', 'john', 'bondo2', 'darius', 'funny', 'crosos', 'man', 'g0', 'renault'];
   ids.forEach((id, i) => {
@@ -931,6 +967,7 @@ window.addEventListener('DOMContentLoaded', () => {
     S.shop.items = (S.shop.items || []).filter(e => e && ITEMS[e.id]);
     UID = 1 + Math.max(0, ...S.team.filter(Boolean).map(u => u.uid), ...S.shop.units.map(e => e.u.uid));
     setEndless(!!S.endless);
+    S.packs = S.packs || {}; S.curses = S.curses || []; setPacks(S.packs);
     showScreen('shop'); renderShop(); phaseSong('shop');
     if (S.boss && !S.bossChosen) bossChoice();
   };

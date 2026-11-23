@@ -128,7 +128,7 @@ const UNITS = {
     on: {
       startBattle(c, u, L) {
         const e = c.strongestEnemy(u.side);
-        if (e) { c.debuff(e, 2 * L); c.caption(`woto tolff plants vodafone chip on ${e.name}`); }
+        if (e) { c.debuff(e, 2 * L, u); c.caption(`woto tolff plants vodafone chip on ${e.name}`); }
       }
     }
   },

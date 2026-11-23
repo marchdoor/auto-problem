@@ -167,7 +167,7 @@ const ACH = {
     const d = this.load();
     if (!d.items.includes(id)) { d.items.push(id); this.save(); }
     if (ITEMS[id] && ITEMS[id].kill) this.unlock('overdose');
-    if (Object.keys(ITEMS).every(k => d.items.includes(k))) this.unlock('soldout');
+    if (Object.keys(ITEMS).filter(k => !ITEMS[k].pack).every(k => d.items.includes(k))) this.unlock('soldout');
   },
   // o: { wins, lives, startLives, endless, boss, rebuild, ghost, net }
   afterBattle(result, o) { if (this.blocked()) return;
@@ -274,7 +274,7 @@ const ACH = {
         if (a.themes || (a.sound && done)) extra = this.playerHTML(a);
         if (a.video && done) extra += `<div class="ach-vid"><video preload="metadata" muted playsinline src="${CUTSCENES[a.video].src}#t=1"></video><button class="ach-watch" data-key="${a.video}">▶ watch again</button></div>`;
         if (a.unit) extra = `<div class="ach-card${done ? '' : ' locked'}" data-unit="${a.unit}"></div>`;
-        if (!done && a.items) { const n = d.items.length, t = Object.keys(ITEMS).length; extra = `<div class="ach-prog"><i style="width:${100 * n / t}%"></i></div><div class="ach-n">${n}/${t} items used</div>`; }
+        if (!done && a.items) { const base = Object.keys(ITEMS).filter(k => !ITEMS[k].pack), n = d.items.filter(k => base.includes(k)).length, t = base.length; extra = `<div class="ach-prog"><i style="width:${100 * n / t}%"></i></div><div class="ach-n">${n}/${t} items used</div>`; }
         if (!done && a.chaos) extra = `<div class="ach-prog"><i style="width:${100 * d.chaos.length / 6}%"></i></div><div class="ach-n">${d.chaos.length}/6 effects seen</div>`;
         const locked = !done && !(a.themes && d.themes.length);
         if (a.themes && !locked) extra = this.playerHTML(a);

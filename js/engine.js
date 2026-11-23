@@ -56,14 +56,14 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
 
   const mk = (u, side) => ({
     uid: UID++, srcUid: u.uid, id: u.id, name: UNITS[u.id].name, atk: u.atk, hp: u.hp, exp: u.exp || 0,
-    lvl: levelOf(u.exp || 0), item: u.item, side, flags: {}, baseAtk: u.atk, maxHp: u.hp, dead: false
+    lvl: levelOf(u.exp || 0), item: u.item, side, flags: {}, baseAtk: u.atk, maxHp: u.hp, dead: false, next: u.next || []
   });
   const T = { A: teamA.filter(Boolean).map(u => mk(u, 'A')), B: teamB.filter(Boolean).map(u => mk(u, 'B')) };
   T.A.concat(T.B).forEach(u => { if (u.id === 'clonetoken') u.name = 'giuseppe n.' + (cloneNo++ % 104 + 1); });
 
   const bombs = [];          // rebook nukes planted on enemy units
   const snap = () => {
-    const cp = side => T[side].map(u => ({ uid: u.uid, id: u.id, name: u.name, atk: u.atk, hp: Math.max(0, u.hp), lvl: u.lvl, exp: u.exp, item: u.item, dead: u.dead, alt: !!u.flags.charging, bomb: (bombs.find(b => b.target === u && b.left > 0) || {}).left || 0 }));
+    const cp = side => T[side].map(u => ({ uid: u.uid, id: u.id, name: u.name, atk: u.atk, hp: Math.max(0, u.hp), lvl: u.lvl, exp: u.exp, item: u.item, dead: u.dead, alt: !!u.flags.charging, bomb: (bombs.find(b => b.target === u && b.left > 0) || {}).left || 0, bleed: u.flags.bleed > 0 ? 1 : 0, psn: u.flags.poison > 0 ? 1 : 0 }));
     frames.push({ A: cp('A'), B: cp('B'), fx: pendingFx, cap: pendingCap, sfx: pendingSfx });
     pendingFx = []; pendingCap = null; pendingSfx = [];
   };
@@ -105,22 +105,51 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       if (!u || u.dead) return;
       u.flags.banned = true; u.dead = true; c.fx(u, 'ban');
     },
-    debuff(u, amt) {
+    debuff(u, amt, src) {
       if (!u || u.dead) return;
       if (turn0 && u.item === 'insideman') { c.fx(u, 'ability'); return; }
+      if (turn0 && u.item === 'carjack' && !u.flags.carUsed && src && src.side !== u.side && !src.dead) {
+        u.flags.carUsed = true; c.fx(u, 'ability'); c.caption(`carjack: ${u.name} flips it back at ${src.name}`); u = src;
+      }
       u.atk = Math.max(1, u.atk - amt); c.fx(u, 'debuff');
+    },
+    // bleeding: 2 damage at the end of each turn, 3 turns. mass = it was going to hit the whole team
+    bleed(t, src, mass) {
+      if (!t || t.dead) return;
+      if (turn0 && t.item === 'insideman') { c.fx(t, 'ability'); return; }
+      if (t.item === 'knife') {
+        c.fx(t, 'ability');
+        if (mass) { c.caption('military knife cancels the bleeding'); return; }
+        if (src && !src.dead && src.side !== t.side && src.item !== 'knife') { c.caption(`military knife sends the bleeding back to ${src.name}`); c.bleed(src, null); }
+        else c.caption('military knife cancels the bleeding');
+        return;
+      }
+      t.flags.bleed = 3; t.flags.bleedBy = src || null; c.fx(t, 'bleed');
+    },
+    poison(t, src) {
+      if (!t || t.dead) return;
+      if (turn0 && t.item === 'insideman') { c.fx(t, 'ability'); return; }
+      t.flags.poison = 3; t.flags.poisonBy = src || null; c.fx(t, 'poison');
     },
     damage(t, amt, src, kind) {
       if (shopMode || !t || t.dead || amt <= 0) return 0;
       if (turn0 && t.item === 'insideman') { c.fx(t, 'ability'); return 0; }
+      if (turn0 && t.item === 'carjack' && !t.flags.carUsed && src && src.side !== t.side && !src.dead) {
+        t.flags.carUsed = true; c.fx(t, 'ability'); c.caption(`carjack: ${t.name} flips it back at ${src.name}`); const o = t; t = src; src = o;
+      }
+      if (t.id === 'miamiz' && kind === 'atk' && rng() < 0.15 + 0.1 * t.lvl) { c.fx(t, 'ability'); c.caption(`${t.name} dodges`); return 0; }
       if (src && src.id === 'john' && hasTag(t, 'nike')) amt *= 2;
       if (src && src.id === 'jahntonner' && hasTag(t, 'nike')) amt *= 3;
       if (src && src.id === 'alqaida' && hasTag(t, 'mib')) amt *= 2;
-      if (t.item === 'petronas' && kind !== 'burn') amt = Math.max(1, amt - 2);
+      if (t.item === 'petronas' && !['burn', 'bleed', 'poison'].includes(kind)) amt = Math.max(1, amt - 2);
       if (t.item === 'keys' && !t.flags.keyUsed && t.hp - amt <= 0) { t.flags.keyUsed = true; amt = t.hp - 1; c.caption('keys to the famous basement'); }
       t.hp -= amt; t.lastHitBy = src;
       c.fx(t, 'hit', amt);
       if (t.hp <= 0) t.dead = true; else hurtQ.push(t);
+      if (t.item === 'corona') {   // coronavirus: every hit on the holder drains the whole enemy team's health
+        T[t.side === 'A' ? 'B' : 'A'].forEach(e => { if (!e.dead && e.hp > 1) { e.hp = Math.max(1, e.hp - t.lvl); c.fx(e, 'debuff'); } });
+        pendingCap = pendingCap || `${t.name} spreads the virus`;
+      }
       return amt;
     },
     summon(side, idx, id, atk, hp, exp = 0) {
@@ -162,6 +191,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       trigger(died, 'faint', idx);
       noSummon = false;
       if (died.item === 'vcall') { burn += 3; pendingCap = 'vodafone call: everyone is burning'; pendingSfx.push('nuke'); }
+      if (died.item === 'heli') { pendingCap = `${died.name}'s helicopter crashes on everyone`; pendingSfx.push('nuke'); c.all().forEach(x => c.damage(x, 4, died, 'heli')); }
       if (died.item === 'reebok') { const e = c.front(c.other(side)); if (e) { c.damage(e, 4, died, 'reebok'); c.caption(`${died.name}'s car has been reebooked`); pendingSfx.push('nuke'); } }
       t.filter(u => !u.dead).forEach(f => trigger(f, 'friendFaint'));
       if (behind && !behind.dead && t.includes(behind)) trigger(behind, 'friendAheadFaint');
@@ -221,6 +251,29 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       settle();
     }
   }
+  // food side effects (u.next) and curses a bad food sent to the enemy
+  const applyNext = (u, type) => {
+    if (type === 'bleed') u.flags.bleed = 3;
+    else if (type === 'poison') u.flags.poison = 3;
+    else if (type === 'skip') u.flags.skipFirst = true;
+    else if (type === 'halfhp') { u.hp = Math.max(1, Math.ceil(u.hp / 2)); u.maxHp = Math.max(1, Math.ceil(u.maxHp / 2)); }
+    else if (type === 'weak') u.atk = Math.max(1, u.atk - 3);
+  };
+  let anyNext = false;
+  T.A.concat(T.B).forEach(u => (u.next || []).forEach(t => { applyNext(u, t); anyNext = true; }));
+  (opts.curses || []).forEach(t => { const e = c.randomAlly('B'); if (e) { applyNext(e, t); anyNext = true; } });
+  if (anyNext) { pendingCap = 'bad food kicks in'; snap(); }
+  // make tent bro: the holder is gone from the start and back on turn 5 (unless its whole team is dead)
+  const hidden = [];
+  for (const side of ['A', 'B']) {
+    const t = T[side];
+    const tents = t.filter(u => u.item === 'tent' && !u.dead);
+    if (!tents.length || tents.length === t.filter(u => !u.dead).length) continue;
+    tents.forEach(u => { hidden.push({ u, side, idx: t.indexOf(u) }); c.fx(u, 'absorb'); });
+    tents.forEach(u => t.splice(t.indexOf(u), 1));
+    pendingCap = 'make tent bro: ' + tents.map(u => u.name).join(', ') + ' disappeared';
+  }
+  if (hidden.length) snap();
   // hopeless darkness imprisoning you: the enemy team's total attack and total health are shuffled between its units
   function scramble(side, owner) {
     const arr = T[side].filter(u => !u.dead && !(turn0 && u.item === 'insideman'));   // the inside man ignores it
@@ -248,6 +301,11 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       c.fx(u, 'buff', [da, dh]); pendingCap = 'good';
     }
     if (u.item === 'hopeless') scramble(c.other(u.side), u);
+    if (u.item === 'fullmoon') { c.buff(u, 4, 4); pendingCap = `${u.name} howls at the full moon`; }
+    if (u.item === 'hamburg') {
+      pendingCap = 'hamburg lore'; pendingSfx.push('nuke');
+      for (const sd of ['A', 'B']) c.randomAllies(sd, 3).forEach(x => c.damage(x, x.hp + 5, u, 'lore'));
+    }
     if (u.item === 'nuke') {            // rebook nuke: a bomb on a random enemy, boom after 3 turns
       const e = c.randomEnemy(u.side);
       if (e) { const dmg = 6 + 4 * u.lvl; bombs.push({ target: e, targetSide: e.side, left: 3, owner: u, dmg, splash: Math.max(1, Math.floor(dmg / 3)) }); c.fx(e, 'ability'); pendingFx.push({ uid: e.uid, type: 'plant', owner: u.uid }); pendingCap = `${u.name} plants a rebook nuke on ${e.name}`; }
@@ -268,9 +326,33 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     c.damage(t, bm.dmg, bm.owner, 'bomb');
     [alive[ai - 1], alive[ai + 1]].filter(Boolean).forEach(n => c.damage(n, bm.splash, bm.owner, 'bomb'));
   };
+  // a landed hit: poison, and a chance of bleeding
+  const onHit = (u, t, d) => {
+    if (d <= 0 || !t || t.dead) return;
+    if (UNITS[u.id].poison) c.poison(t, u);
+    const p = (UNITS[u.id].bleed ? UNITS[u.id].bleed + 0.05 * (u.lvl - 1) : 0) + (u.item === 'fullmoon' ? 0.25 : 0) + (u.item === 'chainsaw' ? 0.15 : 0);
+    if (p > 0 && rng() < p) c.bleed(t, u);
+  };
   let rounds = 0;
   while (T.A.length && T.B.length && rounds++ < 200) {
+    if (rounds === 5 && hidden.length) {
+      for (const h of hidden) {
+        if (h.back || !T[h.side].length) continue;
+        h.back = true; T[h.side].splice(Math.min(h.idx, T[h.side].length), 0, h.u); c.fx(h.u, 'summon'); pendingCap = `${h.u.name} is back from the tent`;
+      }
+      snap();
+    }
     T.A.concat(T.B).forEach(u => { if (!u.dead) trigger(u, 'roundStart'); });
+    // the acid zombie spits every 5th turn, from wherever he stands
+    T.A.concat(T.B).forEach(u => {
+      if (u.dead || u.id !== 'acidz') return;
+      u.flags.acid = (u.flags.acid || 0) + 1;
+      if (u.flags.acid % 5) return;
+      const foes = T[u.side === 'A' ? 'B' : 'A'].filter(x => !x.dead).slice(0, 3);
+      if (!foes.length) return;
+      pendingCap = `${u.name} spits acid`; pendingSfx.push('hit');
+      foes.forEach((e, k) => { c.damage(e, k === 0 ? u.atk : Math.ceil(u.atk / 2), u, 'acid'); c.poison(e, u); });
+    });
     if (pendingFx.length) snap();
     settle();
     if (!T.A.length || !T.B.length) break;
@@ -280,6 +362,13 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     settle();
     a = T.A[0]; b = T.B[0];
     if (!a || !b) break;
+    // 1911: facing a zombie, a chance to kill it outright. better odds against low tiers
+    for (const [x, y] of [[a, b], [b, a]]) {
+      if (x.item === 'm1911' && !y.dead && hasTag(y, 'zombie') && rng() < Math.max(0.1, 0.7 - 0.1 * (UNITS[y.id].tier - 1))) {
+        c.fx(x, 'ability'); c.caption(`${x.name} shoots ${y.name} with the 1911`); pendingSfx.push('hit'); c.damage(y, y.hp + 5, x, 'gun');
+      }
+    }
+    if (pendingFx.length) { snap(); settle(); a = T.A[0]; b = T.B[0]; if (!a || !b) break; }
     // free deal: the one at the front removes the enemy front's item, once, before they fight
     for (const [x, y] of [[a, b], [b, a]]) {
       if (x.item === 'deal' && !x.flags.dealUsed && y.item) {
@@ -298,8 +387,24 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     // fent reactor: the first attack hits for double
     if (a.item === 'fent' && !a.flags.fentFirst) { dmgA *= 2; a.flags.fentFirst = true; }
     if (b.item === 'fent' && !b.flags.fentFirst) { dmgB *= 2; b.flags.fentFirst = true; }
-    const hitsA = lagB ? 0 : lagA ? 2 : 1;
-    const hitsB = lagA ? 0 : lagB ? 2 : 1;
+    // too sick to attack (bad food), or the big man winding up / throwing a rock
+    const wind = (x, y, d) => {
+      if (x.flags.skipFirst) { x.flags.skipFirst = false; c.caption(`${x.name} is too sick to attack`); return 0; }
+      if (x.id === 'bigz') {
+        x.flags.swing = (x.flags.swing || 0) + 1;
+        if (x.flags.swing % 2 === 1) { c.caption(`${x.name} winds up`); return 0; }
+        c.caption(`${x.name} throws a rock`);
+        return rng() < 0.12 + 0.04 * x.lvl ? y.hp + 5 : d;
+      }
+      return d;
+    };
+    dmgA = wind(a, b, dmgA); dmgB = wind(b, a, dmgB);
+    let hitsA = lagB ? 0 : lagA ? 2 : 1;
+    let hitsB = lagA ? 0 : lagB ? 2 : 1;
+    // ladder fail: once, the enemy in front bleeds and skips its turn
+    const ladA = a.item === 'ladder' && !a.flags.ladUsed, ladB = b.item === 'ladder' && !b.flags.ladUsed;
+    if (ladA) { a.flags.ladUsed = true; hitsB = 0; }
+    if (ladB) { b.flags.ladUsed = true; hitsA = 0; }
     c.fx(a, 'attack'); c.fx(b, 'attack');
     pendingSfx.push('hit');
     let dealtA = 0, dealtB = 0;
@@ -312,6 +417,14 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
         if (heal > 0) { u.hp += heal; c.fx(u, 'heal', heal); }
       }
     }
+    onHit(a, b, dealtA); onHit(b, a, dealtB);
+    for (const [u, t, h] of [[a, b, hitsA], [b, a, hitsB]]) {   // the dog zombie always attacks twice
+      if (u.id === 'dogz' && h && !u.dead && !t.dead && u.atk > 0) { const d2 = c.damage(t, u.atk, u, 'atk'); onHit(u, t, d2); }
+    }
+    if (ladA) { c.caption(`${a.name} drops a ladder on ${b.name}`); c.bleed(b, a); }
+    if (ladB) { c.caption(`${b.name} drops a ladder on ${a.name}`); c.bleed(a, b); }
+    if (a.item === 'chainsaw' && T.B[1] && hitsA) c.damage(T.B[1], Math.ceil(dmgA / 3), a, 'saw');
+    if (b.item === 'chainsaw' && T.A[1] && hitsB) c.damage(T.A[1], Math.ceil(dmgB / 3), b, 'saw');
     if (a.item === 'negev' && T.B[1] && hitsA) c.damage(T.B[1], Math.ceil(dmgA / 2), a, 'negev');
     if (b.item === 'negev' && T.A[1] && hitsB) c.damage(T.A[1], Math.ceil(dmgB / 2), b, 'negev');
     snap();
@@ -325,12 +438,17 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       }
     }
     for (const bm of bombs) { if (bm.left > 0 && --bm.left === 0) explode(bm); }
+    c.all().forEach(u => {   // bleeding and poison tick at the end of the turn
+      if (u.flags.bleed > 0) { u.flags.bleed--; c.damage(u, 2, u.flags.bleedBy || null, 'bleed'); }
+      if (u.flags.poison > 0) { u.flags.poison--; c.damage(u, 2, u.flags.poisonBy || null, 'poison'); }
+    });
     if (burn > 0) c.all().forEach(u => c.damage(u, burn, null, 'burn'));
     if (pendingFx.length || pendingCap) { snap(); settle(); }
   }
 
   const result = !T.A.length && !T.B.length ? 'draw' : !T.A.length ? 'lose' : !T.B.length ? 'win' : 'draw';
-  return { frames, result, stats, fusions };
+  const tentLost = hidden.filter(h => !h.back && !T[h.side].length).map(h => ({ side: h.side, uid: h.u.srcUid }));
+  return { frames, result, stats, fusions, tentLost };
 }
 
 // ============================================================
@@ -340,7 +458,7 @@ function tierFor(turn) { return Math.min(6, Math.ceil(turn / 2)); }
 
 function buildBotTeam(turn, rng) {
   const maxTier = tierFor(turn);
-  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier <= maxTier);
+  const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier <= maxTier && packOk(UNITS[k]));
   const count = Math.min(5, 2 + Math.floor(turn / 1.5));
   const team = [];
   for (let i = 0; i < count; i++) {
@@ -357,7 +475,7 @@ function buildBotTeam(turn, rng) {
   if (ENDLESS && turn > 12) budget = Math.floor(11 * 1.6 + (turn - 12) * 2.6); // endless: bots keep growing
   while (budget-- > 0) { const u = team[Math.floor(rng() * team.length)]; if (rng() < 0.5) u.atk++; else u.hp++; }
   if (turn >= 4) {
-    const eq = Object.keys(ITEMS).filter(k => ITEMS[k].equip && ITEMS[k].tier <= maxTier);
+    const eq = Object.keys(ITEMS).filter(k => ITEMS[k].equip && ITEMS[k].tier <= maxTier && packOk(ITEMS[k]));
     const n = Math.floor(rng() * Math.min(3, turn / 3));
     for (let i = 0; i < n; i++) team[Math.floor(rng() * team.length)].item = eq[Math.floor(rng() * eq.length)];
   }
