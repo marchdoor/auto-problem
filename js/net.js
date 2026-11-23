@@ -377,6 +377,24 @@ const NET = {
 
 const netTeam = team => (team || []).map(u => ({ id: u.id, atk: u.atk, hp: u.hp, exp: u.exp, item: u.item, uid: u.uid, next: u.next || [] }));
 
+// what can this device reach? signalling server, direct (STUN) and relay (TURN) candidates
+async function testConnection(out) {
+  out.textContent = 'testing… (about 8 seconds)';
+  const res = { signalling: false, direct: false, relay: false, adapters: 0 };
+  try {
+    const pc = new RTCPeerConnection(peerOptions().config);
+    pc.createDataChannel('x');
+    pc.onicecandidate = e => { if (!e.candidate) return; const t = e.candidate.candidate.split(' ')[7]; if (t === 'srflx') res.direct = true; if (t === 'relay') res.relay = true; if (t === 'host') res.adapters++; };
+    await pc.setLocalDescription(await pc.createOffer());
+    const sig = new Promise(r => { const p = new Peer(undefined, peerOptions()); p.on('open', () => { res.signalling = true; p.destroy(); r(); }); p.on('error', () => r()); setTimeout(r, 8000); });
+    await Promise.all([sig, new Promise(r => setTimeout(r, 8000))]);
+    pc.close();
+  } catch (e) { out.textContent = 'this browser blocks WebRTC: ' + e.message; return; }
+  const ok = b => b ? 'ok' : 'FAILED';
+  out.innerHTML = `server: <b>${ok(res.signalling)}</b> · direct: <b>${ok(res.direct)}</b> · relay: <b>${ok(res.relay)}</b> · network adapters seen: ${res.adapters}` +
+    (!res.signalling ? '<br>cannot reach the matchmaking server (firewall, vpn, blocker?)' : !res.relay && !res.direct ? '<br>cannot reach any server for connecting: a firewall, vpn or extension is blocking WebRTC' : !res.relay ? '<br>the relay is blocked on this network' : '');
+}
+
 function onlineMenu() {
   let name = ''; try { name = localStorage.getItem('np_name') || ''; } catch (e) {}
   openModal(`<h2>play online</h2>
@@ -386,7 +404,9 @@ function onlineMenu() {
       <div><h3>host</h3><p class="t">make a room and share the code</p><button class="big" id="net-host">host game</button></div>
       <div><h3>join</h3><p class="t">enter a friend's room code</p><input id="net-code" maxlength="4" placeholder="ABCD" class="code-input"><button class="big" id="net-join">join</button></div>
     </div>
-    <p class="t">needs an internet connection. connects directly between your PCs.</p>`);
+    <p class="t">needs an internet connection. connects directly between your PCs, or through a relay server when your network blocks that.</p>
+    <button id="net-test">test my connection</button> <span class="t" id="net-test-out"></span>`);
+  $('#net-test').onclick = () => testConnection($('#net-test-out'));
   const getName = () => { const n = $('#net-name').value.trim() || 'player'; try { localStorage.setItem('np_name', n); } catch (e) {} return n; };
   $('#net-host').onclick = () => { const n = getName(); openModal('<h2>making room…</h2>'); NET.host(n); };
   $('#net-join').onclick = () => {
