@@ -106,7 +106,7 @@ const UNITS = {
     on: {
       startBattle(c, u, L) {
         const e = c.strongestEnemy(u.side);
-        if (e) { e.atk = Math.max(1, e.atk - 2 * L); c.fx(e, 'debuff'); c.caption(`woto tolff plants vodafone chip on ${e.name}`); }
+        if (e) { c.debuff(e, 2 * L); c.caption(`woto tolff plants vodafone chip on ${e.name}`); }
       }
     }
   },
@@ -313,6 +313,10 @@ const UNITS = {
   },
 };
 
+// letters swapped for similar-looking crossed ones ("ⱧØ₱ɆⱠɆ₴₴ ...")
+const SCRAMBLE = { A: '₳', B: '฿', C: '₵', D: 'Đ', E: 'Ɇ', F: '₣', G: '₲', H: 'Ⱨ', I: 'ł', K: '₭', L: 'Ⱡ', M: '₥', N: '₦', O: 'Ø', P: '₱', R: 'Ɽ', S: '₴', T: '₮', U: 'Ʉ', W: '₩', Y: 'Ɏ', Z: 'Ƶ' };
+const scrambleText = t => t.toUpperCase().split('').map(ch => SCRAMBLE[ch] || ch).join('');
+
 const ITEMS = {
   gif: { name: 'free 1 gif', tier: 1, icon: '🎁', text: 'give +1/+1', use(s, u) { s.buff(u, 1, 1); } },
   reebok: { name: 'reebok', tier: 1, icon: '💣', equip: true, text: 'equip: car bomb. when this faints, deal 4 damage to the front enemy' },
@@ -325,7 +329,16 @@ const ITEMS = {
   ghostgun: { name: '12 eur ghost gun', tier: 2, icon: '🔫', equip: true, text: 'equip: +3 damage on every attack' },
   petronas: { name: 'petronas suit', tier: 3, icon: '🏎️', equip: true, text: 'equip: take 2 less damage from every hit' },
   hacks: { name: '24 eur hacks', tier: 3, icon: '💶', text: 'give 2 random friends +1/+1', team: true, use(s) { s.randomFriends(null, 2).forEach(f => s.buff(f, 1, 1)); } },
-  iliadbox: { name: 'iliadbox', tier: 4, icon: '📦', text: 'give +2/+2', use(s, u) { s.buff(u, 2, 2); } },
+  adsl: { name: 'adsl 3mbps', tier: 3, icon: '🐌', equip: true, text: 'equip: the first time it attacks, the enemy in front lags and skips its turn, and this character attacks twice' },
+  vcall: { name: 'vodafone call', tier: 4, img: 'vcall.png', fit: 'logo', equip: true, text: 'equip: after this character dies, vodafone is called: everyone on the field burns for 3 damage every turn until the battle ends' },
+  nuke: { name: 'rebook nuke', tier: 4, img: 'nuke.png', fit: 'logo', equip: true, text: 'equip: at the start of battle it plants a rebook bomb on a random enemy. it blows up after 3 turns (6 + 4 per level damage) and splashes a third of that on the enemies next to it' },
+  fent: { name: 'fent reactor', tier: 3, img: 'fent.png', fit: 'logo', equip: true, text: 'equip: its first attack hits for double. after that first turn its health is halved' },
+  insideman: { name: 'inside man', tier: 3, img: 'insideman.png', equip: true, text: 'equip: ignores every attack and debuff at turn 0 (the start of battle effects)' },
+  personally: { name: 'no problem i will personally deal with it', tier: 2, img: 'personally.png', fit: 'whole', equip: true, text: 'equip: when the friend in front of it dies, it gains +3 attack per level' },
+  deal: { name: 'free deal', tier: 4, img: 'deal.png', equip: true, text: 'equip: once, when it is up front facing an enemy that holds an item, it makes a deal and that item is removed before they fight' },
+  good: { name: 'good', tier: 1, img: 'good.png', equip: true, text: 'good' },
+  hopeless: { name: scrambleText('hopeless darkness imprisoning you'), tier: 5, img: 'hopeless.webp', equip: true, text: scrambleText('shuffles the attack and health of the whole enemy team at random. the totals stay the same') },
+  iliadbox: { name: 'iliadbox', tier: 4, img: 'iliadbox.png', fit: 'logo', icon: '📦', text: 'give +2/+2', use(s, u) { s.buff(u, 2, 2); } },
   chip: { name: 'vodafone chip', tier: 4, icon: '📡', equip: true, text: 'equip: start of battle, deal 3 damage to a random enemy' },
   negev: { name: 'negev', tier: 5, img: 'negev.png', fit: 'contain', icon: '☢️', equip: true, text: 'equip: attacks splash half damage onto the enemy behind' },
   vnegev: { name: 'vodafone essence negev', tier: 5, img: 'vnegev.webp', fit: 'contain', icon: '📶', equip: true, text: 'equip: heals 100% of the attack damage it deals. vodafone essence' },

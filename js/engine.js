@@ -59,8 +59,9 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
   const T = { A: teamA.filter(Boolean).map(u => mk(u, 'A')), B: teamB.filter(Boolean).map(u => mk(u, 'B')) };
   T.A.concat(T.B).forEach(u => { if (u.id === 'clonetoken') u.name = 'giuseppe n.' + (cloneNo++ % 104 + 1); });
 
+  const bombs = [];          // rebook nukes planted on enemy units
   const snap = () => {
-    const cp = side => T[side].map(u => ({ uid: u.uid, id: u.id, name: u.name, atk: u.atk, hp: Math.max(0, u.hp), lvl: u.lvl, exp: u.exp, item: u.item, dead: u.dead }));
+    const cp = side => T[side].map(u => ({ uid: u.uid, id: u.id, name: u.name, atk: u.atk, hp: Math.max(0, u.hp), lvl: u.lvl, exp: u.exp, item: u.item, dead: u.dead, bomb: (bombs.find(b => b.target === u && b.left > 0) || {}).left || 0 }));
     frames.push({ A: cp('A'), B: cp('B'), fx: pendingFx, cap: pendingCap, sfx: pendingSfx });
     pendingFx = []; pendingCap = null; pendingSfx = [];
   };
@@ -70,6 +71,8 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
   const shopMode = opts.shopKill != null;
   const fieldCap = opts.fieldCap || MAX_FIELD;
   let noSummon = false;   // a revived unit cannot create clones / summons when it dies again
+  let burn = 0;           // vodafone call: damage to everyone at the end of every turn
+  let turn0 = true;       // start of battle: the inside man ignores attacks and debuffs
   const c = {
     rng,
     other: s => s === 'A' ? 'B' : 'A',
@@ -91,10 +94,16 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       u.atk = Math.min(MAX_STAT, u.atk + a); u.hp = Math.min(MAX_STAT, u.hp + h); u.maxHp = Math.min(MAX_STAT, u.maxHp + h);
       c.fx(u, 'buff', [a, h]);
     },
+    debuff(u, amt) {
+      if (!u || u.dead) return;
+      if (turn0 && u.item === 'insideman') { c.fx(u, 'ability'); return; }
+      u.atk = Math.max(1, u.atk - amt); c.fx(u, 'debuff');
+    },
     damage(t, amt, src, kind) {
       if (shopMode || !t || t.dead || amt <= 0) return 0;
+      if (turn0 && t.item === 'insideman') { c.fx(t, 'ability'); return 0; }
       if (src && src.id === 'john' && hasTag(t, 'nike')) amt *= 2;
-      if (t.item === 'petronas') amt = Math.max(1, amt - 2);
+      if (t.item === 'petronas' && kind !== 'burn') amt = Math.max(1, amt - 2);
       if (t.item === 'keys' && !t.flags.keyUsed && t.hp - amt <= 0) { t.flags.keyUsed = true; amt = t.hp - 1; c.caption('keys to the famous basement'); }
       t.hp -= amt; t.lastHitBy = src;
       c.fx(t, 'hit', amt);
@@ -139,9 +148,12 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       noSummon = !!died.flags.revived;
       trigger(died, 'faint', idx);
       noSummon = false;
+      if (died.item === 'vcall') { burn += 3; pendingCap = 'vodafone call: everyone is burning'; pendingSfx.push('nuke'); }
       if (died.item === 'reebok') { const e = c.front(c.other(side)); if (e) { c.damage(e, 4, died, 'reebok'); c.caption(`${died.name}'s car has been reebooked`); pendingSfx.push('nuke'); } }
       t.filter(u => !u.dead).forEach(f => trigger(f, 'friendFaint'));
       if (behind && !behind.dead && t.includes(behind)) trigger(behind, 'friendAheadFaint');
+      // no problem i will personally deal with it: the friend in front fell, so this one gets angry
+      if (behind && !behind.dead && t.includes(behind) && behind.item === 'personally') { c.buff(behind, 3 * behind.lvl, 0); pendingCap = 'no problem i will deal personally with it'; }
       if (killer && !killer.dead && killer.side !== side && T[killer.side].includes(killer)) trigger(killer, 'knockout');
       // crosos ritual: comes back once, same level, half attack and half health (its faint effects already happened)
       if (died.item === 'ritual' && !died.flags.revived && !died.flags.banned && t.filter(u => !u.dead).length < fieldCap) {
@@ -180,16 +192,52 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       settle();
     }
   }
+  // hopeless darkness imprisoning you: the enemy team's total attack and total health are shuffled between its units
+  function scramble(side, owner) {
+    const arr = T[side].filter(u => !u.dead && !(turn0 && u.item === 'insideman'));   // the inside man ignores it
+    const n = arr.length; if (n < 2) return;
+    const split = total => {            // a random way to cut `total` into n parts of at least 1 each
+      const rem = Math.max(0, total - n);
+      const cuts = Array.from({ length: n - 1 }, () => Math.floor(rng() * (rem + 1))).sort((x, y) => x - y);
+      const parts = []; let prev = 0;
+      for (const cut of cuts) { parts.push(1 + cut - prev); prev = cut; }
+      parts.push(1 + rem - prev);
+      return parts;
+    };
+    const pa = split(arr.reduce((s, u) => s + u.atk, 0)), ph = split(arr.reduce((s, u) => s + u.hp, 0));
+    arr.forEach((u, i) => { const da = pa[i] - u.atk, dh = ph[i] - u.hp; u.atk = pa[i]; u.hp = ph[i]; u.maxHp = ph[i]; c.fx(u, 'buff', [da, dh]); });
+    pendingCap = 'hopeless darkness imprisoning you';
+  }
   const order = T.A.concat(T.B); order.forEach(u => { u.tb = rng(); }); order.sort((a, b) => b.atk - a.atk || a.tb - b.tb);
   for (const u of order) {
     if (u.dead || !T[u.side].includes(u)) continue;
     trigger(u, 'startBattle');
     if (u.item === 'chip') { const e = c.randomEnemy(u.side); if (e) c.damage(e, 3, u, 'chip'); }
+    if (u.item === 'good') {            // good: a random -3..+3 on attack and on health
+      const da = Math.floor(rng() * 7) - 3, dh = Math.floor(rng() * 7) - 3;
+      u.atk = Math.max(1, u.atk + da); u.hp = Math.max(1, u.hp + dh); u.maxHp = Math.max(1, u.maxHp + dh);
+      c.fx(u, 'buff', [da, dh]); pendingCap = 'good';
+    }
+    if (u.item === 'hopeless') scramble(c.other(u.side), u);
+    if (u.item === 'nuke') {            // rebook nuke: a bomb on a random enemy, boom after 3 turns
+      const e = c.randomEnemy(u.side);
+      if (e) { const dmg = 6 + 4 * u.lvl; bombs.push({ target: e, targetSide: e.side, left: 3, owner: u, dmg, splash: Math.max(1, Math.floor(dmg / 3)) }); c.fx(e, 'ability'); pendingCap = `${u.name} plants a rebook nuke on ${e.name}`; }
+    }
     if (pendingFx.length) snap();
     settle();
   }
+  turn0 = false;
 
   // ---- main fight ----
+  const explode = bm => {
+    let t = bm.target;
+    if (t.dead || !T[t.side].includes(t)) t = c.randomAlly(bm.targetSide);   // its target is already gone: it jumps to another enemy
+    if (!t) return;
+    const alive = T[t.side].filter(u => !u.dead), ai = alive.indexOf(t);
+    pendingCap = `rebook nuke blows up on ${t.name}`; pendingSfx.push('nuke');
+    c.damage(t, bm.dmg, bm.owner, 'bomb');
+    [alive[ai - 1], alive[ai + 1]].filter(Boolean).forEach(n => c.damage(n, bm.splash, bm.owner, 'bomb'));
+  };
   let rounds = 0;
   while (T.A.length && T.B.length && rounds++ < 200) {
     let a = T.A[0], b = T.B[0];
@@ -198,22 +246,53 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     settle();
     a = T.A[0]; b = T.B[0];
     if (!a || !b) break;
-    const dmgA = a.atk + (a.item === 'ghostgun' ? 3 : 0);
-    const dmgB = b.atk + (b.item === 'ghostgun' ? 3 : 0);
+    // free deal: the one at the front removes the enemy front's item, once, before they fight
+    for (const [x, y] of [[a, b], [b, a]]) {
+      if (x.item === 'deal' && !x.flags.dealUsed && y.item) {
+        x.flags.dealUsed = true; const lost = y.item; y.item = null;
+        c.fx(x, 'ability'); c.fx(y, 'ability'); pendingCap = `free deal: ${y.name} gives up ${ITEMS[lost].name}`; pendingSfx.push('item');
+      }
+    }
+    if (pendingFx.length) snap();
+    // adsl 3mbps: the first time it attacks the enemy lags and skips its turn, and it attacks twice
+    const lagA = a.item === 'adsl' && !a.flags.lagUsed, lagB = b.item === 'adsl' && !b.flags.lagUsed;
+    if (lagA) a.flags.lagUsed = true;
+    if (lagB) b.flags.lagUsed = true;
+    if (lagA || lagB) pendingCap = lagA && lagB ? 'both are lagging. nobody attacks' : `${(lagA ? b : a).name} is lagging and skips its turn`;
+    let dmgA = a.atk + (a.item === 'ghostgun' ? 3 : 0);
+    let dmgB = b.atk + (b.item === 'ghostgun' ? 3 : 0);
+    // fent reactor: the first attack hits for double
+    if (a.item === 'fent' && !a.flags.fentFirst) { dmgA *= 2; a.flags.fentFirst = true; }
+    if (b.item === 'fent' && !b.flags.fentFirst) { dmgB *= 2; b.flags.fentFirst = true; }
+    const hitsA = lagB ? 0 : lagA ? 2 : 1;
+    const hitsB = lagA ? 0 : lagB ? 2 : 1;
     c.fx(a, 'attack'); c.fx(b, 'attack');
     pendingSfx.push('hit');
-    const dealtA = c.damage(b, dmgA, a, 'atk');
-    const dealtB = c.damage(a, dmgB, b, 'atk');
+    let dealtA = 0, dealtB = 0;
+    if (hitsA && hitsB) { dealtA = c.damage(b, dmgA, a, 'atk'); dealtB = c.damage(a, dmgB, b, 'atk'); }
+    else if (hitsA) { dealtA = c.damage(b, dmgA, a, 'atk'); if (hitsA > 1 && !b.dead) dealtA += c.damage(b, dmgA, a, 'atk'); }
+    else if (hitsB) { dealtB = c.damage(a, dmgB, b, 'atk'); if (hitsB > 1 && !a.dead) dealtB += c.damage(a, dmgB, b, 'atk'); }
     for (const [u, d] of [[a, dealtA], [b, dealtB]]) {
       if (u.item === 'vnegev' && !u.dead && d > 0) {
         const heal = Math.min(d, MAX_STAT - u.hp);
         if (heal > 0) { u.hp += heal; c.fx(u, 'heal', heal); }
       }
     }
-    if (a.item === 'negev' && T.B[1]) c.damage(T.B[1], Math.ceil(dmgA / 2), a, 'negev');
-    if (b.item === 'negev' && T.A[1]) c.damage(T.A[1], Math.ceil(dmgB / 2), b, 'negev');
+    if (a.item === 'negev' && T.B[1] && hitsA) c.damage(T.B[1], Math.ceil(dmgA / 2), a, 'negev');
+    if (b.item === 'negev' && T.A[1] && hitsB) c.damage(T.A[1], Math.ceil(dmgB / 2), b, 'negev');
     snap();
     settle();
+    // end of the turn: fent reactors halve their health, bombs tick, vodafone burns everyone
+    for (const u of [a, b]) {
+      if (u.item === 'fent' && u.flags.fentFirst && !u.flags.fentHalved && !u.dead) {
+        u.flags.fentHalved = true; const nh = Math.max(1, Math.ceil(u.hp / 2)); const lost = u.hp - nh;
+        u.hp = nh; u.maxHp = Math.max(nh, Math.ceil(u.maxHp / 2)); if (lost > 0) c.fx(u, 'hit', lost);
+        pendingCap = 'the fent reactor takes its toll';
+      }
+    }
+    for (const bm of bombs) { if (bm.left > 0 && --bm.left === 0) explode(bm); }
+    if (burn > 0) c.all().forEach(u => c.damage(u, burn, null, 'burn'));
+    if (pendingFx.length || pendingCap) { snap(); settle(); }
   }
 
   const result = !T.A.length && !T.B.length ? 'draw' : !T.A.length ? 'lose' : !T.B.length ? 'win' : 'draw';

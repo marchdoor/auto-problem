@@ -20,7 +20,7 @@ let sel = null;        // {kind:'shop'|'item'|'team', idx}
 let speed = 1, skipping = false, battleBusy = false;
 
 const imgSrc = id => { const i = UNITS[id].img; return i ? `assets/units/${i.includes('.') ? i : i + '.png'}` : null; };
-const itemArt = (id, cls = '') => { const it = ITEMS[id]; return it.img ? `<img class="iimg ${cls} ${it.fit === 'contain' ? 'contain' : ''}" src="assets/items/${it.img}" alt="">` : it.icon; };
+const itemArt = (id, cls = '') => { const it = ITEMS[id]; return it.img ? `<img class="iimg ${cls} ${it.fit === 'contain' ? 'contain' : it.fit === 'logo' ? 'logo' : it.fit === 'whole' ? 'whole' : ''}" src="assets/items/${it.img}" alt="">` : it.icon; };
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const itemCost = it => it.cost || ITEM_COST;
 const lvl = u => levelOf(u.exp);
@@ -315,6 +315,7 @@ function cardEl(u, opts = {}) {
     </div>
     ${u.item ? `<div class="itm" title="${ITEMS[u.item].name}">${itemArt(u.item)}</div>` : ''}
     ${u.debuffNote ? `<div class="dbf" title="${u.debuffNote}">−</div>` : ''}
+    ${u.bomb ? `<div class="bombtag" title="rebook nuke">💣${u.bomb}</div>` : ''}
     <div class="stats"><div class="badge atk">${u.atk}</div><div class="badge hp">${u.hp}</div></div>
     <div class="lvl">lvl ${L} ${pips}</div>`;
   return el;
@@ -609,7 +610,7 @@ async function playFrame(f, prev, i, deathSounds, replaceSynthFaint) {
       const el = document.querySelector(`#battle .card[data-uid="${x.uid}"]`);
       if (!el) continue;
       if (x.type === 'hit') { el.classList.add('shake'); floatText(x.uid, '-' + x.amt, 'dmg'); }
-      else if (x.type === 'buff') { el.classList.add('buffed'); if (x.amt) floatText(x.uid, `+${x.amt[0]}/+${x.amt[1]}`, 'buf'); }
+      else if (x.type === 'buff') { el.classList.add('buffed'); if (x.amt) { const sg = n => (n >= 0 ? '+' : '') + n; floatText(x.uid, `${sg(x.amt[0])}/${sg(x.amt[1])}`, x.amt[0] < 0 || x.amt[1] < 0 ? 'dmg' : 'buf'); } }
       else if (x.type === 'heal') { el.classList.add('buffed'); floatText(x.uid, '+' + x.amt + ' hp', 'buf'); }
       else if (x.type === 'debuff') el.classList.add('shake');
       else if (x.type === 'summon') el.classList.add('summoned');

@@ -535,3 +535,10 @@ body.endless .wins-max { display: none; }
 }
 
 @media (max-width: 760px) { .side-name { padding-bottom: 12px; } }
+
+/* logo-style item pictures (not cropped, not tilted) and the planted bomb marker */
+.iimg.logo { object-fit: contain; padding: 14%; background: #fff; border-radius: 50%; }
+.card .bombtag { position: absolute; bottom: 38px; left: -6px; z-index: 3; background: #000; border: 2px solid #ff1744; color: #fff; font: 900 13px Arial; padding: 1px 5px; border-radius: 10px; animation: abil 1s infinite; }
+@media (min-width: 761px) { #battle .card .bombtag { font-size: clamp(6px, calc(var(--card-w) * .13), 13px); bottom: calc(var(--card-w) * .42); } }
+
+.iimg.whole { object-fit: contain; background: #000; border-radius: 0; }
