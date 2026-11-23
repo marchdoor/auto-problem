@@ -31,6 +31,7 @@ PC: a slider next to the speaker (the speaker button mutes and restores). Phones
 
 ## Songs and death sounds
 - `assets/music/songs/`: normal songs. Every shop phase and battle phase plays the next song from a shuffled list, with no repeats until all have played. Online, the host picks so both players hear the same song.
+- `assets/music/menusong.mp3`: the title / menu song (not part of the shuffle).
 - `assets/music/win/` and `assets/music/lose/`: played after a battle, once every death sound has finished.
 - `assets/music/suddendeath.mp3`: plays for the whole online sudden death round.
 - `assets/sfx/death/`: a random one plays on every death, and they stack.

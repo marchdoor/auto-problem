@@ -22,6 +22,7 @@ let speed = 1, skipping = false, battleBusy = false;
 const imgSrc = id => { const i = UNITS[id].img; return i ? `assets/units/${i.includes('.') ? i : i + '.png'}` : null; };
 const itemArt = (id, cls = '') => { const it = ITEMS[id]; return it.img ? `<img class="iimg ${cls} ${it.fit === 'contain' ? 'contain' : ''}" src="assets/items/${it.img}" alt="">` : it.icon; };
 const pick = a => a[Math.floor(Math.random() * a.length)];
+const itemCost = it => it.cost || ITEM_COST;
 const lvl = u => levelOf(u.exp);
 
 // ---------------- persistence ----------------
@@ -210,12 +211,35 @@ function buyUnit(shopIdx, slot) {
   sel = null; saveRun(); renderShop();
 }
 
+// agartha 67 overdose: kill one of your characters. Its faint effects play out (buffs stay for good,
+// clones fill up to 5), exactly like a battle death but with no enemies.
+function shopKill(target) {
+  const team = S.team.filter(Boolean);
+  const byUid = new Map(team.map(x => [x.uid, x]));
+  const res = simulateBattle(team, [], Math.floor(Math.random() * 1e9), { shopKill: target.uid, fieldCap: 5 });
+  const out = [];
+  res.shop.forEach(r => {
+    const o = r.srcUid != null ? byUid.get(r.srcUid) : null;
+    if (o) {
+      const a0 = o.atk, h0 = o.hp;
+      o.atk = Math.min(MAX_STAT, r.atk); o.hp = Math.min(MAX_STAT, r.hp);
+      logBuff(o, o.atk - a0, o.hp - h0, 'agartha 67 overdose');
+      out.push(o);
+    } else out.push(newUnit(r.id, { atk: r.atk, hp: r.hp, exp: r.exp, item: r.item }));   // a clone, twin or revived unit
+  });
+  S.team = [null, null, null, null, null];
+  out.slice(0, 5).forEach((x, i) => { S.team[i] = x; });
+  Audio2.play('faint');
+  (res.caps.length ? res.caps : [`${UNITS[target.id].name} is died`]).slice(0, 3).forEach(t => toast(t));
+}
+
 function useItem(itemIdx, slot) {
   const entry = S.shop.items[itemIdx]; const u = S.team[slot];
   if (!entry || !u) return;
-  if (S.gold < ITEM_COST) return toast('not enough gold and you cry');
   const it = ITEMS[entry.id];
-  S.gold -= ITEM_COST; S.shop.items.splice(itemIdx, 1);
+  if (S.gold < itemCost(it)) return toast('not enough gold and you cry');
+  S.gold -= itemCost(it); S.shop.items.splice(itemIdx, 1);
+  if (it.kill) { shopKill(u); sel = null; saveRun(); renderShop(); return; }
   if (it.equip) { u.item = entry.id; toast(`${UNITS[u.id].name} equips ${it.name}`); }
   else { buffSrc = it.name; try { it.use(shopCtx(), u); } finally { buffSrc = null; } }
   Audio2.play('item');
@@ -309,7 +333,7 @@ function infoFor(u, isItem) {
   if (!u) { box.innerHTML = `<div class="info-empty">tap a character to see what they do. tap a shop card, then a team slot to buy (on PC you can also drag).</div>`; return; }
   if (isItem) {
     const it = ITEMS[u];
-    box.innerHTML = `<div class="info-icon">${itemArt(u)}</div><div><h3>${it.name}</h3><div class="t">item · tier ${it.tier} · ${ITEM_COST}🪙</div><div class="ab">${it.text}</div></div>`;
+    box.innerHTML = `<div class="info-icon">${itemArt(u)}</div><div><h3>${it.name}</h3><div class="t">item · tier ${it.tier} · ${itemCost(it)}🪙</div><div class="ab">${it.text}</div></div>`;
     return;
   }
   const d = UNITS[u.id], L = levelOf(u.exp || 0);
@@ -716,13 +740,13 @@ function codex() {
 }
 
 function itemsCodex() {
-  let html = `<h2>all items</h2><p class="t">items cost ${ITEM_COST} gold in the shop. <b>equip</b> items stay on a character (one each), the others are used up.</p><div class="codex">`;
+  let html = `<h2>all items</h2><p class="t">items cost ${ITEM_COST} gold in the shop unless it says otherwise. <b>equip</b> items stay on a character (one each), the others are used up.</p><div class="codex">`;
   for (let t = 1; t <= 6; t++) {
     const list = Object.entries(ITEMS).filter(([k, it]) => it.tier === t);
     if (!list.length) continue;
     html += `<div class="codex-tier">tier ${t}</div>`;
     list.forEach(([k, it]) => {
-      const kind = it.equip ? 'equip · stays on the character' : it.team ? 'team item · used up' : 'used up';
+      const kind = (it.equip ? 'equip · stays on the character' : it.team ? 'team item · used up' : it.kill ? 'kills a character · used up' : 'used up') + (it.cost && it.cost !== ITEM_COST ? ` · ${it.cost} gold` : '');
       html += `<div class="entry"><div class="ipic-sm">${itemArt(k)}</div><div><h4>${it.name}</h4><div class="s">${kind}</div><div class="d">${it.text}</div></div></div>`;
     });
   }
@@ -794,8 +818,7 @@ function toTitle() {
   showScreen('title');
   document.documentElement.style.setProperty('--gray', '1');
   $('#btn-continue').classList.toggle('hidden', !store.get('np_run', null));
-  const titleSong = MANIFEST.songs.find(x => /problem arises/i.test(x)) || MANIFEST.songs[0];
-  Audio2.playSong(titleSong);
+  Audio2.playSong('assets/music/menusong.mp3');
   const col = $('#collage'); col.innerHTML = '';
   const ids = ['giuseppe', 'noproblem', 'john', 'bondo2', 'darius', 'funny', 'crosos', 'man', 'g0', 'renault'];
   ids.forEach((id, i) => {

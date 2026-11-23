@@ -66,6 +66,10 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
   };
 
   const hurtQ = [];
+  // shop mode (the agartha 67 overdose): only one unit dies and nothing is fought. no enemies, so no damage.
+  const shopMode = opts.shopKill != null;
+  const fieldCap = opts.fieldCap || MAX_FIELD;
+  let noSummon = false;   // a revived unit cannot create clones / summons when it dies again
   const c = {
     rng,
     other: s => s === 'A' ? 'B' : 'A',
@@ -88,7 +92,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       c.fx(u, 'buff', [a, h]);
     },
     damage(t, amt, src, kind) {
-      if (!t || t.dead || amt <= 0) return 0;
+      if (shopMode || !t || t.dead || amt <= 0) return 0;
       if (src && src.id === 'john' && hasTag(t, 'nike')) amt *= 2;
       if (t.item === 'petronas') amt = Math.max(1, amt - 2);
       if (t.item === 'keys' && !t.flags.keyUsed && t.hp - amt <= 0) { t.flags.keyUsed = true; amt = t.hp - 1; c.caption('keys to the famous basement'); }
@@ -99,7 +103,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     },
     summon(side, idx, id, atk, hp) {
       const alive = T[side].filter(u => !u.dead);
-      if (alive.length >= MAX_FIELD) return null;
+      if (noSummon || alive.length >= fieldCap) return null;
       const n = mk({ id, atk, hp, exp: 0 }, side);
       n.uid = UID++;
       if (id === 'clonetoken') n.name = 'giuseppe n.' + (cloneNo++ % 104 + 1);
@@ -132,13 +136,32 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
         ? fill(pick(CAPTIONS.ko), { k: killer.name, n: died.name })
         : fill(pick(CAPTIONS.faint), { n: died.name }));
       pendingSfx.push('faint');
+      noSummon = !!died.flags.revived;
       trigger(died, 'faint', idx);
+      noSummon = false;
       if (died.item === 'reebok') { const e = c.front(c.other(side)); if (e) { c.damage(e, 4, died, 'reebok'); c.caption(`${died.name}'s car has been reebooked`); pendingSfx.push('nuke'); } }
       t.filter(u => !u.dead).forEach(f => trigger(f, 'friendFaint'));
       if (behind && !behind.dead && t.includes(behind)) trigger(behind, 'friendAheadFaint');
       if (killer && !killer.dead && killer.side !== side && T[killer.side].includes(killer)) trigger(killer, 'knockout');
+      // crosos ritual: comes back once, same level, half attack and half health (its faint effects already happened)
+      if (died.item === 'ritual' && !died.flags.revived && !died.flags.banned && t.filter(u => !u.dead).length < fieldCap) {
+        const n = mk({ id: died.id, atk: Math.max(1, Math.ceil(died.atk / 2)), hp: Math.max(1, Math.ceil(died.maxHp / 2)), exp: died.exp }, side);
+        n.uid = UID++; n.name = died.name; n.flags.revived = true; n.item = null;
+        t.splice(Math.min(idx, t.length), 0, n);
+        c.fx(n, 'summon'); pendingCap = `crosos ritual: ${died.name} is back`; pendingSfx.push('giuseppe');
+      }
       snap();
     }
+  }
+
+  // ---- shop death: kill one unit and let its faint effects play out, nothing else ----
+  if (shopMode) {
+    const tgt = T.A.find(u => u.srcUid === opts.shopKill);
+    if (tgt) { tgt.dead = true; settle(); }
+    return {
+      shop: T.A.filter(u => !u.dead).map(u => ({ srcUid: u.srcUid, id: u.id, atk: u.atk, hp: u.hp, exp: u.exp, item: u.item || null })),
+      caps: frames.map(f => f.cap).filter(Boolean),
+    };
   }
 
   // ---- start of battle ----
