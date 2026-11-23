@@ -108,5 +108,16 @@ const MANIFEST = {
   "assets/sfx/death/deathsfx6.mp3",
   "assets/sfx/death/deathsfx7.mp3",
   "assets/sfx/death/deathsfx9.mp3"
+ ],
+ "bg": [
+  "assets/bg/castrol.webp",
+  "assets/bg/forest.webp",
+  "assets/bg/garage.webp",
+  "assets/bg/graveyard.webp",
+  "assets/bg/meadow.webp",
+  "assets/bg/meo.webp",
+  "assets/bg/palace.png",
+  "assets/bg/ruins.webp",
+  "assets/bg/warehouse.webp"
  ]
 };

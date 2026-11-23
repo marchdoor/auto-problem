@@ -358,7 +358,8 @@ function toast(t) {
 const sleep = ms => new Promise(r => setTimeout(r, skipping ? 0 : ms / speed));
 
 function pickOpponent() {
-  const ghosts = store.get('np_ghosts', []).filter(g => g.turn === S.turn && g.run !== S.runId);
+  // ignore ghosts saved by an older version that contain characters which no longer exist
+  const ghosts = store.get('np_ghosts', []).filter(g => g.turn === S.turn && g.run !== S.runId && g.team.every(u => UNITS[u.id]));
   if (ghosts.length && Math.random() < 0.4) {
     const g = pick(ghosts);
     return { name: `ghost: ${g.name}`, team: g.team.map(u => newUnit(u.id, { atk: u.atk, hp: u.hp, exp: u.exp, item: u.item })) };
@@ -388,6 +389,7 @@ async function endTurn(forced) {
   const opp = pickOpponent();
   const seed = Math.floor(Math.random() * 1e9);
   const res = simulateBattle(S.team, opp.team, seed);
+  setBattleBg(seed);
   showScreen('battle');
   phaseSong('battle');
   $('#enemy-name').textContent = opp.name;
@@ -397,6 +399,16 @@ async function endTurn(forced) {
 
   S.nikeKills += res.stats.cloneKills;
   finishBattle(res.result);
+}
+
+// one background per battle. The same seed gives the same picture, so both
+// online players see the same place.
+function setBattleBg(seed) {
+  const el = $('#battle-bg'); if (!el) return;
+  const list = (typeof MANIFEST !== 'undefined' && MANIFEST.bg) || [];
+  if (!list.length) { el.style.backgroundImage = 'none'; return; }
+  const path = list[Math.abs(Math.floor(seed)) % list.length];
+  el.style.backgroundImage = `linear-gradient(rgba(0,0,0,.62), rgba(0,0,0,.42) 45%, rgba(0,0,0,.74)), url("${encodePath(path)}")`;
 }
 
 function renderBattleTeams(f) {
@@ -660,6 +672,11 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#btn-new').onclick = () => { Audio2.play('start'); newRun(); };
   $('#btn-continue').onclick = () => {
     S = store.get('np_run', null); if (!S) return;
+    // drop anything a newer version removed (old saves) so the game can't crash on it
+    S.team = (S.team || []).map(u => (u && UNITS[u.id]) ? Object.assign(u, { item: u.item && ITEMS[u.item] ? u.item : null }) : null);
+    while (S.team.length < 5) S.team.push(null);
+    S.shop.units = (S.shop.units || []).filter(e => e && e.u && UNITS[e.u.id]);
+    S.shop.items = (S.shop.items || []).filter(e => e && ITEMS[e.id]);
     UID = 1 + Math.max(0, ...S.team.filter(Boolean).map(u => u.uid), ...S.shop.units.map(e => e.u.uid));
     showScreen('shop'); renderShop(); phaseSong('shop');
   };

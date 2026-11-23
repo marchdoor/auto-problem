@@ -141,6 +141,10 @@ h1 span { display: block; font-size: .42em; color: var(--accent); letter-spacing
 .toast.show { opacity: 1; }
 
 /* ---------------- BATTLE ---------------- */
+/* a background picture per battle, darkened so cards and captions stay readable.
+   it is black and white and fades to colour with your wins, like everything else. */
+.battle-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; background: #000 center / cover no-repeat;
+  filter: grayscale(var(--gray)); transition: filter 1.2s; }
 .speed { display: flex; gap: 8px; }
 .sp { padding: 6px 12px; font-size: 14px; box-shadow: 2px 2px 0 #000; }
 .sp.active { background: var(--accent); }

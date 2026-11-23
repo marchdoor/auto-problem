@@ -149,7 +149,7 @@ const NET = {
     while (ids.length >= 2) list.push([ids.pop(), ids.pop()]);
     if (ids.length === 1) list.push([ids.pop(), 'ghost']);
     const battles = list.map(([a, b]) => {
-      const seed = Math.floor(Math.random() * 1e9);
+      const seed = this.sd && this.sd.bgSeed != null ? this.sd.bgSeed : Math.floor(Math.random() * 1e9);
       let teamB, nameB;
       if (b === 'ghost') {
         const dead = this.order.filter(id => !this.players[id].alive && this.players[id].team.length);
@@ -269,6 +269,7 @@ const NET = {
       result = result === 'win' ? 'lose' : result === 'lose' ? 'win' : 'draw';
     }
     if (!bt.sudden) phaseSong('battle');
+    setBattleBg(bt.seed);
     showScreen('battle');
     $('#hud-sd') && $('#hud-sd').classList.add('hidden');
     this.sdPanel(null);
@@ -384,7 +385,8 @@ Object.assign(NET, {
   hostStartVote() {
     clearTimeout(this.hostTimeout);
     this.phase = 'sdvote'; this.sd.votes = {};
-    this.broadcast({ t: 'sd_vote', seconds: SD_VOTE_SECONDS, teams: this.sdTeams(), names: this.sdNames() });
+    this.sd.bgSeed = Math.floor(Math.random() * 1e9); // the sudden death battle reuses this seed, so its background doesn't change at the start
+    this.broadcast({ t: 'sd_vote', bgSeed: this.sd.bgSeed, seconds: SD_VOTE_SECONDS, teams: this.sdTeams(), names: this.sdNames() });
     this.hostTimeout = setTimeout(() => this.hostResolveVote(), (SD_VOTE_SECONDS + 2) * 1000);
   },
   hostResolveVote() {
@@ -462,6 +464,7 @@ Object.assign(NET, {
     if (!S || !this.amAlive()) return;
     $('#modal').classList.add('hidden'); $('#modal-close').classList.remove('hidden');
     $('#result').classList.add('hidden');
+    if (m.bgSeed != null) setBattleBg(m.bgSeed);
     showScreen('battle');
     $('#b-lives').textContent = S.lives; $('#b-wins').textContent = S.wins; $('#b-turn').textContent = S.turn;
     this.sdShowTeams(m);
