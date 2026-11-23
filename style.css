@@ -473,3 +473,48 @@ html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparen
 
 /* one place to tune the phone bottom margin: 5% of the visible screen height */
 :root { --bottom-pad: calc(var(--app-h, 100vh) * 0.05); }
+
+/* ============================================================
+   volume widget, compact menu, items box, endless HUD, final wave
+   ============================================================ */
+.vol { display: inline-flex; align-items: center; gap: 8px; }
+.vol-range { width: 110px; accent-color: #e53935; cursor: pointer; }
+.vol-pct { display: none; font: 700 12px Arial; color: var(--muted); min-width: 34px; }
+.title-vol { position: absolute; top: 12px; right: 14px; z-index: 6; background: rgba(0,0,0,.55); padding: 4px 8px; border: 2px solid #fff; }
+#title .title-vol { position: fixed; }
+/* touch screens and phones: no slider, the speaker button cycles 100/75/50/25/0 */
+@media (max-width: 760px), (pointer: coarse) {
+  .vol-range { display: none; }
+  .vol-pct { display: inline; }
+}
+
+.menu-vol { display: flex; align-items: center; gap: 12px; margin: 6px 0 16px; }
+.menu-vol input { flex: 1; accent-color: #e53935; height: 28px; cursor: pointer; }
+.menu-vol span { font-size: 24px; }
+.menu-vol b { min-width: 46px; text-align: right; }
+
+/* the hamburger menu: a small centred box instead of a wide left-aligned one */
+.modal-box.compact { width: min(440px, 92vw); text-align: center; }
+.modal-box.compact h2 { margin: 0 0 12px; margin-right: 0; }
+.modal-box.compact .menu { align-items: stretch; }
+.modal-box.compact .menu button { width: 100%; min-width: 0; }
+.modal-box.compact .standings { margin-left: auto; margin-right: auto; }
+.modal-box.compact .menu-vol { text-align: left; }
+
+.menu button small { display: block; font-size: 12px; font-weight: 400; opacity: .75; margin-top: 3px; }
+.menu-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.menu-row button { min-width: 0 !important; flex: 1; }
+
+/* items box */
+.ipic-sm { width: 70px; height: 70px; flex: none; border-radius: 50%; border: 2px solid #fff; overflow: hidden; background: radial-gradient(#333, #000); display: flex; align-items: center; justify-content: center; font-size: 34px; }
+.ipic-sm .iimg { width: 100%; height: 100%; }
+
+/* endless mode: no "/10" next to the trophies */
+body.endless .wins-max { display: none; }
+
+/* the final wave choice */
+.boss-box { text-align: center; }
+.boss-box .sd-team { margin: 12px 0; }
+.boss-box .sd-choices { margin: 14px 0 4px; }
+.boss-box .sd-choices button { width: 340px; }
+@media (max-width: 760px) { .boss-box .sd-choices button { width: auto; } .boss-box .sd-title { font-size: 40px !important; } }

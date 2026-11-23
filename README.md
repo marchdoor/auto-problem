@@ -17,6 +17,17 @@ Press **play online**. One person hosts and gets a 4-letter room code, and up to
 - Everyone should run the same version of the game, otherwise battles can play out differently on each PC.
 - If the host leaves, the game ends for everyone.
 
+## Endless mode and the final wave
+- Start it from **endless run** on the title screen, or after winning 10 trophies in a normal run (you can end the run with a win, or keep going).
+- Levels keep growing (level 3 at 5 merges, then +1 level per 3 merges) and the stat cap goes from 50 to 150.
+- "nike inc status" counts every enemy unit your team kills. At 104 dead, the **final wave** is next: Giuseppe and the Nike Inc. militia.
+- Before the final wave you choose: keep your team (normal shop, 10 gold) or **rebuild**: sell the team, get 60 gold and a veterans market (tier 5-6 characters at level 4 with +50/+50).
+- Beat the final wave to win. Lose and you lose a life and face it again.
+- Tuning knobs, both in `js/engine.js`: `BOSS` (the boss team's stats and level) and `REBUILD` (gold, veteran bonus and level).
+
+## Volume
+PC: a slider next to the speaker (the speaker button mutes and restores). Phones and touch screens: the speaker button steps 100 > 75 > 50 > 25 > 0 > 100. The menu has a slider everywhere. The level is saved.
+
 ## Songs and death sounds
 - `assets/music/songs/`: normal songs. Every shop phase and battle phase plays the next song from a shuffled list, with no repeats until all have played. Online, the host picks so both players hear the same song.
 - `assets/music/win/` and `assets/music/lose/`: played after a battle, once every death sound has finished.

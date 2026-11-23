@@ -5,9 +5,12 @@
 const SFX_NAMES = ['buy', 'sell', 'roll', 'merge', 'levelup', 'hit', 'faint', 'nuke', 'start', 'win', 'lose', 'giuseppe', 'freeze', 'click', 'item'];
 
 const Audio2 = {
-  ctx: null, files: {}, muted: false, volume: 0.6, music: null, musicName: null,
+  ctx: null, files: {}, muted: false, volume: 0.6, level: 100, prevLevel: 100, music: null, musicName: null,
+  // volume is a level from 0 to 100 (saved). internal gain = 0.6 * level / 100
   init() {
-    try { this.muted = localStorage.getItem('np_muted') === '1'; } catch (e) {}
+    let l = 100;
+    try { const v = localStorage.getItem('np_vol'); if (v !== null && !isNaN(+v)) l = Math.max(0, Math.min(100, +v)); } catch (e) {}
+    this.applyLevel(l);
     for (const n of SFX_NAMES) this.probe('assets/sfx/' + n, a => { this.files[n] = a; });
   },
   probe(base, ok) {
@@ -78,13 +81,23 @@ const Audio2 = {
       this.tryPlayMusic();
     });
   },
-  toggleMute() {
-    this.muted = !this.muted;
-    try { localStorage.setItem('np_muted', this.muted ? '1' : '0'); } catch (e) {}
-    if (this.music) { if (this.muted) this.music.pause(); else this.tryPlayMusic(); }
+  applyLevel(l) {
+    this.level = Math.max(0, Math.min(100, Math.round(l)));
+    this.volume = 0.6 * this.level / 100;
+    this.muted = this.level === 0;
+    if (this.music) { this.music.volume = this.volume * 0.5; if (this.muted) this.music.pause(); else if (this.music.paused) this.tryPlayMusic(); }
+    if (this.active) this.active.forEach(a => { a.volume = this.volume; });
     if (this.muted && this.stopSfx) this.stopSfx();
-    return this.muted;
-  }
+  },
+  setLevel(l) {
+    if (this.level > 0) this.prevLevel = this.level;
+    this.applyLevel(l);
+    try { localStorage.setItem('np_vol', String(this.level)); } catch (e) {}
+    return this.level;
+  },
+  // PC: the speaker button mutes / restores. Phones: it steps 100 > 75 > 50 > 25 > 0 > 100.
+  toggleMute() { return this.setLevel(this.level > 0 ? 0 : (this.prevLevel || 100)); },
+  cycleLevel() { const next = [100, 75, 50, 25, 0].find(v => v < this.level); return this.setLevel(next === undefined ? 100 : next); }
 };
 
 // ---------------- songs, playlists and stacking sound files ----------------

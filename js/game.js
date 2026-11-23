@@ -46,7 +46,7 @@ function shopCtx() {
     allFriends: () => live(),
     ahead(u) { const i = team.indexOf(u); for (let j = i - 1; j >= 0; j--) if (team[j]) return team[j]; return null; },
     behind(u) { const i = team.indexOf(u); for (let j = i + 1; j < 5; j++) if (team[j]) return team[j]; return null; },
-    addExp(u, n) { const before = lvl(u); u.exp = Math.min(5, u.exp + n); if (lvl(u) > before) onLevelUp(u); },
+    addExp(u, n) { const before = lvl(u); u.exp = Math.min(expCap(), u.exp + n); if (lvl(u) > before) onLevelUp(u); },
     caption(t) { toast(t); },
   };
   return s;
@@ -69,9 +69,10 @@ function phaseSong(kind) {
   Audio2.playSong(nextSong(S.playlist));
 }
 
-function newRun() {
+function newRun(endless = false) {
+  setEndless(endless);
   S = { runId: Date.now() + '-' + Math.floor(Math.random() * 1e6), turn: 1, gold: START_GOLD, lives: START_LIVES, wins: 0,
-        team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [] };
+        team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [], endless: !!endless };
   rollShop(true);
   S.playlist = newPlaylist();
   saveRun();
@@ -83,14 +84,48 @@ function startTurn() {
   S.turn++; S.gold = START_GOLD;
   rollShop(true);
   S.team.filter(Boolean).forEach(u => shopTrigger(u, 'startTurn'));
+  S.rebuild = false; S.bossChosen = false;
   saveRun();
   showScreen('shop'); renderShop();
   phaseSong('shop');
+  if (S.boss) bossChoice();
+}
+
+// ---------------- the final wave (endless mode, after 104 kills) ----------------
+function bossChoice() {
+  const boss = buildBossTeam();
+  openModal(`<div class="boss-box">
+    <h2 class="sd-title">final wave</h2>
+    <p class="cap-style" style="font-size:22px">104 dead. 1 to go.</p>
+    <p>giuseppe creatore and the nike inc. militia are coming. this is what you'll face:</p>
+    <div class="sd-team" id="boss-team"></div>
+    <div class="sd-choices">
+      <button class="big" id="boss-keep">keep my team<small>normal shop · ${START_GOLD} gold</small></button>
+      <button class="big danger" id="boss-new">rebuild<small>sell the team · ${REBUILD.gold} gold · veterans market (tier ${REBUILD.minTier}-6, level ${levelOf(REBUILD.exp)}, +${REBUILD.bonus}/+${REBUILD.bonus})</small></button>
+    </div></div>`);
+  $('#modal-close').classList.add('hidden');
+  const row = $('#boss-team'); boss.forEach(u => { u.lvl = levelOf(u.exp); row.appendChild(cardEl(u)); });
+  $('#boss-keep').onclick = () => { S.bossChosen = true; Audio2.play('click'); closeModal(); saveRun(); renderShop(); };
+  $('#boss-new').onclick = () => {
+    S.bossChosen = true; S.rebuild = true;
+    S.team = [null, null, null, null, null]; S.gold = REBUILD.gold; S.shop.units = []; S.shop.items = [];
+    rollShop(true); sel = null; Audio2.play('start'); closeModal(); saveRun(); renderShop();
+    toast('the veterans market is open');
+  };
 }
 
 function shopSizes() {
   const t = S.turn;
+  if (S.rebuild) return { units: REBUILD.shop, items: 2 };
   return { units: t <= 4 ? 3 : t <= 8 ? 4 : 5, items: t <= 2 ? 1 : 2 };
+}
+// a shop character: normal, or a veteran in the final wave's rebuild shop
+function shopUnit(tier) {
+  if (S.rebuild) {
+    const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && UNITS[k].tier >= REBUILD.minTier);
+    return mkVeteran(pick(pool));
+  }
+  return newUnit(randomUnitId(tier));
 }
 function randomUnitId(maxTier) {
   const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && UNITS[k].tier <= maxTier);
@@ -103,7 +138,7 @@ function rollShop(free) {
   const tier = tierFor(S.turn), n = shopSizes();
   const keptU = S.shop.units.filter(s => s.frozen), keptI = S.shop.items.filter(s => s.frozen);
   const units = keptU.slice(0, Math.max(n.units, keptU.length));
-  while (units.length < n.units) units.push({ u: newUnit(randomUnitId(tier)), frozen: false });
+  while (units.length < n.units) units.push({ u: shopUnit(tier), frozen: false });
   const items = keptI.slice();
   while (items.length < n.items) items.push({ id: randomItemId(tier), frozen: false });
   S.shop.units = units; S.shop.items = items;
@@ -127,7 +162,7 @@ function mergeInto(target, src) {
   target.atk = Math.min(MAX_STAT, Math.max(target.atk, src.atk) + 1);
   target.hp = Math.min(MAX_STAT, Math.max(target.hp, src.hp) + 1);
   logBuff(target, target.atk - a0, target.hp - h0, 'merge');
-  target.exp = Math.min(5, target.exp + src.exp + 1);
+  target.exp = Math.min(expCap(), target.exp + src.exp + 1);
   if (!target.item && src.item) target.item = src.item;
   Audio2.play('merge');
   if (lvl(target) > before) onLevelUp(target);
@@ -138,10 +173,10 @@ function onLevelUp(u) {
   toast(`${UNITS[u.id].name} goes ssj (level ${lvl(u)})`);
   const t = Math.min(6, tierFor(S.turn) + 1);
   const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && UNITS[k].tier === t);
-  if (S.shop.units.length < 7) S.shop.units.push({ u: newUnit(pick(pool)), frozen: false });
+  if (S.shop.units.length < 8) S.shop.units.push({ u: S.rebuild ? shopUnit(6) : newUnit(pick(pool)), frozen: false });
 }
 
-function canMerge(a, b) { return a && b && a.id === b.id && a.uid !== b.uid && lvl(a) < 3; }
+function canMerge(a, b) { return a && b && a.id === b.id && a.uid !== b.uid && lvl(a) < maxLevel(); }
 
 function buyUnit(shopIdx, slot) {
   const entry = S.shop.units[shopIdx]; if (!entry) return;
@@ -221,6 +256,7 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
 }
 function setColour() {
+  document.body.classList.toggle('endless', !!(S && S.endless));
   const w = S ? S.wins : 0;
   document.documentElement.style.setProperty('--gray', Math.max(0, 1 - w / WIN_TARGET).toFixed(2));
 }
@@ -232,7 +268,8 @@ function cardEl(u, opts = {}) {
   el.dataset.uid = u.uid;
   const L = u.lvl || levelOf(u.exp || 0), exp = u.exp || 0;
   const src = imgSrc(u.id);
-  const pips = L >= 3 ? '' : (L === 1 ? [0, 1].map(k => `<i class="${exp > k ? 'on' : ''}"></i>`) : [2, 3, 4].map(k => `<i class="${exp > k ? 'on' : ''}"></i>`)).join('');
+  const pr = expProgress(exp);
+  const pips = pr.need ? Array.from({ length: pr.need }, (_, k) => `<i class="${k < pr.have ? 'on' : ''}"></i>`).join('') : '';
   el.innerHTML = `
     <div class="pic">${src ? `<img src="${src}" alt=""${d.bw ? ' class="bw"' : ''}>` : `<div class="noimg">?</div>`}
       ${opts.shop ? `<span class="tier">t${d.tier}</span><span class="cost">${UNIT_COST}🪙</span>` : ''}
@@ -272,9 +309,10 @@ function renderShop() {
   $('#hud-wins').textContent = S.wins;
   $('#hud-turn').textContent = S.turn;
   const k = S.nikeKills;
-  $('#hud-nike').textContent = k >= 104 ? 'nike inc status: total 104 dead 1 to go' : `nike inc status: ${k} dead ${104 - k} to go`;
+  const nk = S.boss ? 'nike inc status: 104 dead. the final wave' : k >= 104 ? 'nike inc status: total 104 dead 1 to go' : `nike inc status: ${k} dead ${104 - k} to go`;
+  $('#hud-nike').textContent = (S.endless ? '∞ endless · ' : '') + nk;
   $('#tier-label').textContent = `tier 1-${tierFor(S.turn)}`;
-  $('#btn-mute').textContent = Audio2.muted ? '🔇' : '🔊';
+  syncVolume();
 
   // team
   const row = $('#team-row'); row.innerHTML = '';
@@ -386,7 +424,8 @@ async function endTurn(forced) {
   saveGhost();
   if (S.net) { NET.submitTeam(); return; }
 
-  const opp = pickOpponent();
+  const isBoss = !!S.boss;
+  const opp = isBoss ? { name: 'nike inc. · the final wave', team: buildBossTeam() } : pickOpponent();
   const seed = Math.floor(Math.random() * 1e9);
   const res = simulateBattle(S.team, opp.team, seed);
   setBattleBg(seed);
@@ -398,7 +437,7 @@ async function endTurn(forced) {
   await playBattle(res.frames, { result: res.result, seed });
 
   S.nikeKills += res.stats.cloneKills;
-  finishBattle(res.result);
+  finishBattle(res.result, isBoss);
 }
 
 // one background per battle. The same seed gives the same picture, so both
@@ -548,53 +587,85 @@ function showCaption(t) {
   c.style.opacity = 1;
 }
 
-function finishBattle(result) {
+function finishBattle(result, isBoss) {
   battleBusy = false;
   const caps = CAPTIONS[result];
-  let title = result, sub = '';
-  if (result === 'win') { S.wins++; sub = `${S.wins}/${WIN_TARGET} trophies`; }
+  let sub = '';
+  if (result === 'win') { S.wins++; sub = S.endless ? `${S.wins} trophies` : `${S.wins}/${WIN_TARGET} trophies`; }
   else if (result === 'lose') { S.lives--; sub = `${S.lives} lives left`; }
   else { sub = 'nobody wins. untied ends.'; }
+  // endless: 104 kills open the final wave
+  let note = '';
+  if (S.endless) {
+    if (!S.boss && S.nikeKills >= 104) { S.boss = true; note = ' · 104 dead. 1 to go. the final wave is next'; }
+    else if (!S.boss) note = ` · ${S.nikeKills} dead, ${104 - S.nikeKills} to go`;
+  }
   playResultTheme(result);
   S.history.push(result);
   setColour();
   $('#result-title').textContent = result === 'win' ? 'win' : result === 'lose' ? 'lose' : 'draw';
   $('#result-cap').textContent = pick(caps);
-  $('#result-sub').textContent = sub;
+  $('#result-sub').textContent = sub + note;
   $('#result').classList.remove('hidden');
   $('#caption').textContent = '';
 
-  const over = S.wins >= WIN_TARGET ? 'victory' : S.lives <= 0 ? 'defeat' : null;
-  $('#btn-result').textContent = over ? 'continue' : 'next turn';
-  $('#btn-result').onclick = () => {
-    $('#result').classList.add('hidden');
-    if (over) return endRun(over);
-    startTurn();
-  };
+  const b1 = $('#btn-result'), b2 = $('#btn-result2');
+  b2.classList.add('hidden');
+  let over = null;
+  if (S.lives <= 0) over = 'defeat';
+  else if (isBoss && result === 'win') over = 'boss';
+  else if (!S.endless && S.wins >= WIN_TARGET) over = 'choice';
+  const next = () => { $('#result').classList.add('hidden'); startTurn(); };
+  if (over === 'choice') {
+    // 10 trophies: end the run with a win, or keep going until all 104 are dead
+    b1.textContent = 'end the run (win)';
+    b1.onclick = () => { $('#result').classList.add('hidden'); endRun('victory'); };
+    b2.textContent = `keep going: endless (${S.nikeKills}/104 dead)`;
+    b2.classList.remove('hidden');
+    b2.onclick = () => { S.endless = true; setEndless(true); saveRun(); next(); };
+  } else if (over) {
+    b1.textContent = 'continue';
+    b1.onclick = () => { $('#result').classList.add('hidden'); endRun(over === 'boss' ? 'victory' : 'defeat', over === 'boss'); };
+  } else {
+    b1.textContent = 'next turn';
+    b1.onclick = next;
+  }
   saveRun();
 }
 
-function endRun(kind) {
+function endRun(kind, boss) {
   store.del('np_run');
   const best = store.get('np_best', 0);
   if (S.wins > best) store.set('np_best', S.wins);
+  const bestK = store.get('np_best_kills', 0);
+  if (S.nikeKills > bestK) store.set('np_best_kills', S.nikeKills);
   const win = kind === 'victory';
   if (win) document.documentElement.style.setProperty('--gray', '0');
+  const kills = `nike inc status: ${Math.min(104, S.nikeKills)} dead ${S.nikeKills >= 104 ? '1 to go' : (104 - S.nikeKills) + ' to go'}`;
+  const text = boss ? 'giuseppe creatore is captured in the famous basement. 105 dead. the line is ended.'
+    : win ? 'no problem vi, the end. giuseppe captured in the famous basement.' : 'its over when giuseppe says its over';
   openModal(`
     <div style="text-align:center">
       <h2 style="font-size:72px">${win ? 'end of the line' : 'and you cry'}</h2>
-      <p class="cap-style" style="font-size:26px">${win ? 'no problem vi, the end. giuseppe captured in the famous basement.' : 'its over when giuseppe says its over'}</p>
-      <p>${S.wins} wins · turn ${S.turn} · nike inc status: ${Math.min(104, S.nikeKills)} dead ${S.nikeKills >= 104 ? 1 : 104 - S.nikeKills} to go</p>
-      <p>best run: ${Math.max(best, S.wins)} wins</p>
+      <p class="cap-style" style="font-size:26px">${text}</p>
+      <p>${S.wins} wins · turn ${S.turn} · ${kills}${S.endless ? ' · endless' : ''}</p>
+      <p>best run: ${Math.max(best, S.wins)} wins · best kills: ${Math.max(bestK, S.nikeKills)}</p>
       <button class="big" id="btn-again">new run</button>
     </div>`);
   Audio2.play(win ? 'win' : 'lose');
   $('#btn-again').onclick = () => { closeModal(); newRun(); };
   S = null;
+  setEndless(false);
 }
 
 // ---------------- modals ----------------
-function openModal(html) { $('#modal-body').innerHTML = html; $('#modal').classList.remove('hidden'); $('#modal-close').classList.remove('hidden'); }
+function openModal(html, opts = {}) {
+  $('#modal-body').innerHTML = html;
+  $('#modal').classList.remove('hidden');
+  $('#modal-close').classList.remove('hidden');
+  $('#modal .modal-box').classList.toggle('compact', !!opts.compact);
+  syncVolume();
+}
 function closeModal() { $('#modal').classList.add('hidden'); if (!S) toTitle(); }
 
 function howToPlay() {
@@ -602,11 +673,12 @@ function howToPlay() {
   <ul>
     <li>each turn you get <b>10 gold</b>. characters and items cost <b>3</b>, rolling the shop costs <b>1</b>.</li>
     <li>click a shop card, then a team slot (or drag it). the slot on the <b>right</b> is the <b>front</b>, they attack first.</li>
-    <li>drop a character on a copy of itself to <b>merge</b>: +1/+1 and experience. 3 copies = <b>level 2</b>, 6 = <b>level 3</b>. leveling up adds a higher tier character to the shop.</li>
+    <li>drop a character on a copy of itself to <b>merge</b>: +1/+1 and experience. 3 copies = <b>level 2</b>, 6 = <b>level 3</b>. the squares under a card show how far along it is. leveling up adds a higher tier character to the shop.</li>
     <li>items: food-style ones give stats, <b>equip</b> items stay on the character (one each).</li>
     <li><b>freeze</b> a shop card to keep it for the next turn. <b>sell</b> gives gold equal to the level.</li>
     <li>press <b>end turn</b>: the battle plays by itself. fronts hit each other at the same time until one team is empty.</li>
-    <li>win <b>10</b> battles to end the line. lose <b>5</b> and you cry.</li>
+    <li>win <b>10</b> battles to end the line. lose <b>5</b> and you cry. after 10 trophies you can end the run, or keep going in <b>endless</b>.</li>
+    <li><b>endless</b>: levels never stop growing (3 merges per level after level 2) and the stat cap is higher. keep going until you've killed all <b>104</b> (see "nike inc status"). then the <b>final wave</b> comes: giuseppe and the nike inc. militia. before it you can keep your team, or sell it and rebuild with ${REBUILD.gold} gold in a veterans market.</li>
     <li>the game starts in black and white and gets more colour the closer you get to the end. just like the series.</li>
     <li>new tiers unlock every 2 turns. <b>nike</b> characters take double damage from john tanner.</li>
   </ul>`);
@@ -621,36 +693,85 @@ function codex() {
       html += `<div class="entry">${src ? `<img src="${src}"${d.bw ? ' style="filter:grayscale(1) contrast(1.3)"' : ''}>` : `<div class="noimg">?</div>`}<div><h4>${d.name}</h4><div class="s">${d.atk}/${d.hp}${(d.tags || []).includes('nike') ? ' · nike inc.' : ''}</div><div class="d">${d.text(1)}</div></div></div>`;
     });
   }
-  html += `<div class="codex-tier">items</div>`;
-  Object.values(ITEMS).forEach(it => { html += `<div class="entry"><div class="noimg" style="font-size:38px;color:#fff;overflow:hidden">${itemArt(Object.keys(ITEMS).find(k => ITEMS[k] === it))}</div><div><h4>${it.name}</h4><div class="s">tier ${it.tier}${it.equip ? ' · equip' : ''}</div><div class="d">${it.text}</div></div></div>`; });
   openModal(html + `</div>`);
+}
+
+function itemsCodex() {
+  let html = `<h2>all items</h2><p class="t">items cost ${ITEM_COST} gold in the shop. <b>equip</b> items stay on a character (one each), the others are used up.</p><div class="codex">`;
+  for (let t = 1; t <= 6; t++) {
+    const list = Object.entries(ITEMS).filter(([k, it]) => it.tier === t);
+    if (!list.length) continue;
+    html += `<div class="codex-tier">tier ${t}</div>`;
+    list.forEach(([k, it]) => {
+      const kind = it.equip ? 'equip · stays on the character' : it.team ? 'team item · used up' : 'used up';
+      html += `<div class="entry"><div class="ipic-sm">${itemArt(k)}</div><div><h4>${it.name}</h4><div class="s">${kind}</div><div class="d">${it.text}</div></div></div>`;
+    });
+  }
+  openModal(html + `</div>`);
+}
+
+// ---------------- volume ----------------
+// PC: a slider next to the speaker (the speaker mutes / restores).
+// Phones and touch screens: no slider, the speaker button steps 100 > 75 > 50 > 25 > 0 > 100.
+const touchy = () => window.matchMedia('(max-width: 760px), (pointer: coarse)').matches;
+const volIcon = l => l === 0 ? '🔇' : l <= 25 ? '🔈' : l <= 60 ? '🔉' : '🔊';
+function mountVolume() {
+  document.querySelectorAll('[data-vol]').forEach(el => {
+    el.classList.add('vol');
+    el.innerHTML = `<button class="icon vol-btn" title="volume"></button><input class="vol-range" type="range" min="0" max="100" step="5" aria-label="volume"><span class="vol-pct"></span>`;
+    el.querySelector('.vol-btn').onclick = () => { if (touchy()) Audio2.cycleLevel(); else Audio2.toggleMute(); syncVolume(); Audio2.play('click'); };
+    el.querySelector('.vol-range').oninput = e => { Audio2.setLevel(+e.target.value); syncVolume(); };
+    el.querySelector('.vol-range').onchange = () => Audio2.play('click');
+  });
+  syncVolume();
+}
+function syncVolume() {
+  const l = Audio2.level;
+  document.querySelectorAll('.vol').forEach(el => {
+    el.querySelector('.vol-btn').textContent = volIcon(l);
+    const r = el.querySelector('.vol-range'); if (r && +r.value !== l) r.value = l;
+    el.querySelector('.vol-pct').textContent = l + '%';
+  });
+  const m = $('#m-vol'); if (m) { if (+m.value !== l) m.value = l; $('#m-vol-pct').textContent = l + '%'; }
+  const mi = $('#m-vol-ico'); if (mi) mi.textContent = volIcon(l);
+}
+const menuVolHTML = `<div class="menu-vol"><span id="m-vol-ico">🔊</span><input id="m-vol" type="range" min="0" max="100" step="5" aria-label="volume"><b id="m-vol-pct">100%</b></div>`;
+function wireMenuVolume() {
+  const m = $('#m-vol'); if (!m) return;
+  m.oninput = () => { Audio2.setLevel(+m.value); syncVolume(); };
+  m.onchange = () => Audio2.play('click');
+  syncVolume();
 }
 
 function menu() {
   if (S && S.net) {
-    openModal(`<h2>menu</h2><p>online room <b>${NET.code}</b></p>${NET.standingsHTML(NET.lobbyPlayers || [])}<div class="menu" style="align-items:flex-start">
-      <button id="m-resume" class="big">resume</button><button id="m-codex">all characters</button>
-      <button id="m-leave" style="background:#6d1b1b">leave online game</button></div>`);
+    openModal(`<h2>menu</h2><p>online room <b>${NET.code}</b></p>${NET.standingsHTML(NET.lobbyPlayers || [])}${menuVolHTML}<div class="menu">
+      <button id="m-resume" class="big">resume</button><button id="m-codex">all characters</button><button id="m-items">all items</button>
+      <button id="m-leave" style="background:#6d1b1b">leave online game</button></div>`, { compact: true });
     $('#m-resume').onclick = () => $('#modal').classList.add('hidden');
-    $('#m-codex').onclick = codex;
+    $('#m-codex').onclick = codex; $('#m-items').onclick = itemsCodex;
     $('#m-leave').onclick = () => NET.leave();
+    wireMenuVolume();
     return;
   }
-  openModal(`<h2>menu</h2><div class="menu" style="align-items:flex-start">
+  openModal(`<h2>menu</h2>${menuVolHTML}<div class="menu">
     <button id="m-resume" class="big">resume</button>
     <button id="m-how">how to play</button>
     <button id="m-codex">all characters</button>
+    <button id="m-items">all items</button>
     <button id="m-title">save and quit to title</button>
-    <button id="m-abandon" class="danger" style="background:#6d1b1b">abandon run</button></div>`);
+    <button id="m-abandon" class="danger" style="background:#6d1b1b">abandon run</button></div>`, { compact: true });
   $('#m-resume').onclick = () => $('#modal').classList.add('hidden');
-  $('#m-how').onclick = howToPlay; $('#m-codex').onclick = codex;
+  $('#m-how').onclick = howToPlay; $('#m-codex').onclick = codex; $('#m-items').onclick = itemsCodex;
   $('#m-title').onclick = () => { saveRun(); $('#modal').classList.add('hidden'); toTitle(); };
-  $('#m-abandon').onclick = () => { store.del('np_run'); S = null; $('#modal').classList.add('hidden'); toTitle(); };
+  $('#m-abandon').onclick = () => { store.del('np_run'); S = null; setEndless(false); $('#modal').classList.add('hidden'); toTitle(); };
+  wireMenuVolume();
 }
 
 // ---------------- title ----------------
 function toTitle() {
   cancelTheme();
+  setEndless(false);
   showScreen('title');
   document.documentElement.style.setProperty('--gray', '1');
   $('#btn-continue').classList.toggle('hidden', !store.get('np_run', null));
@@ -669,7 +790,9 @@ function toTitle() {
 // ---------------- wiring ----------------
 window.addEventListener('DOMContentLoaded', () => {
   Audio2.init();
-  $('#btn-new').onclick = () => { Audio2.play('start'); newRun(); };
+  mountVolume();
+  $('#btn-new').onclick = () => { Audio2.play('start'); newRun(false); };
+  $('#btn-endless').onclick = () => { Audio2.play('start'); newRun(true); };
   $('#btn-continue').onclick = () => {
     S = store.get('np_run', null); if (!S) return;
     // drop anything a newer version removed (old saves) so the game can't crash on it
@@ -678,11 +801,14 @@ window.addEventListener('DOMContentLoaded', () => {
     S.shop.units = (S.shop.units || []).filter(e => e && e.u && UNITS[e.u.id]);
     S.shop.items = (S.shop.items || []).filter(e => e && ITEMS[e.id]);
     UID = 1 + Math.max(0, ...S.team.filter(Boolean).map(u => u.uid), ...S.shop.units.map(e => e.u.uid));
+    setEndless(!!S.endless);
     showScreen('shop'); renderShop(); phaseSong('shop');
+    if (S.boss && !S.bossChosen) bossChoice();
   };
   $('#btn-how').onclick = howToPlay;
   $('#btn-online').onclick = onlineMenu;
   $('#btn-units').onclick = codex;
+  $('#btn-items').onclick = itemsCodex;
   $('#modal-close').onclick = closeModal;
   $('#btn-roll').onclick = roll;
   $('#btn-freeze').onclick = toggleFreeze;
@@ -692,7 +818,6 @@ window.addEventListener('DOMContentLoaded', () => {
   sellBtn.addEventListener('dragleave', () => sellBtn.classList.remove('over'));
   sellBtn.addEventListener('drop', e => { e.preventDefault(); sellBtn.classList.remove('over'); if (sel && sel.kind === 'team') sellTeam(sel.idx); });
   $('#btn-end').onclick = endTurn;
-  $('#btn-mute').onclick = () => { Audio2.toggleMute(); renderShop(); };
   $('#btn-menu').onclick = menu;
   document.querySelectorAll('.sp[data-speed]').forEach(b => b.onclick = () => {
     speed = +b.dataset.speed;

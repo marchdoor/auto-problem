@@ -14,15 +14,20 @@
   <!-- TITLE -->
   <section id="title" class="screen active">
     <div class="title-collage" id="collage"></div>
+    <div class="title-vol" data-vol></div>
     <div class="title-box">
       <h1>no problem<span>: auto problem</span></h1>
       <p class="sub">a turn based auto battler. build a team, end the line.</p>
       <div class="menu">
         <button id="btn-continue" class="big hidden">continue run</button>
         <button id="btn-new" class="big">new run</button>
+        <button id="btn-endless" class="big">endless run<small>kill all 104, then the final wave</small></button>
         <button id="btn-online" class="big">play online</button>
-        <button id="btn-how">how to play</button>
-        <button id="btn-units">all characters</button>
+        <div class="menu-row">
+          <button id="btn-how">how to play</button>
+          <button id="btn-units">all characters</button>
+          <button id="btn-items">all items</button>
+        </div>
       </div>
       <p class="rights">RIGHTS RESERVED TO MARCHDOOR™</p>
     </div>
@@ -33,13 +38,13 @@
     <header class="hud">
       <div class="stat"><span class="ico">🪙</span><b id="hud-gold">10</b></div>
       <div class="stat"><span class="ico">❤️</span><b id="hud-lives">5</b></div>
-      <div class="stat"><span class="ico">🏆</span><b id="hud-wins">0</b>/10</div>
+      <div class="stat"><span class="ico">🏆</span><b id="hud-wins">0</b><span class="wins-max">/10</span></div>
       <div class="stat"><span class="lbl">turn</span><b id="hud-turn">1</b></div>
       <div class="stat timer hidden" id="hud-timer"></div>
       <div class="stat sd hidden" id="hud-sd">☠ sudden death</div>
       <div class="stat nike" id="hud-nike">nike inc status: 0 dead 104 to go</div>
       <div class="spacer"></div>
-      <button class="icon" id="btn-mute" title="mute">🔊</button>
+      <div data-vol></div>
       <button class="icon" id="btn-menu" title="menu">☰</button>
     </header>
 
@@ -71,9 +76,10 @@
   <section id="battle" class="screen">
     <header class="hud">
       <div class="stat"><span class="ico">❤️</span><b id="b-lives">5</b></div>
-      <div class="stat"><span class="ico">🏆</span><b id="b-wins">0</b>/10</div>
+      <div class="stat"><span class="ico">🏆</span><b id="b-wins">0</b><span class="wins-max">/10</span></div>
       <div class="stat"><span class="lbl">turn</span><b id="b-turn">1</b></div>
       <div class="spacer"></div>
+      <div data-vol></div>
       <div class="speed">
         <button data-speed="1" class="sp active">1x</button>
         <button data-speed="2" class="sp">2x</button>
@@ -102,6 +108,7 @@
       <p id="result-cap" class="cap-style">end of the line</p>
       <p id="result-sub"></p>
       <button id="btn-result" class="big">continue</button>
+      <button id="btn-result2" class="big hidden">keep going</button>
     </div>
   </div>
 

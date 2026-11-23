@@ -3,8 +3,23 @@
 //  so later online play can replay the same fight on both PCs.
 // ============================================================
 
-const MAX_STAT = 50;
-const levelOf = exp => exp >= 5 ? 3 : exp >= 2 ? 2 : 1;
+// ---- endless mode: levels keep growing (3 merges per level after level 2) and the stat cap is higher
+let ENDLESS = false;
+const MAX_STAT_NORMAL = 50, MAX_STAT_ENDLESS = 150;
+let MAX_STAT = MAX_STAT_NORMAL;
+function setEndless(on) { ENDLESS = !!on; MAX_STAT = ENDLESS ? MAX_STAT_ENDLESS : MAX_STAT_NORMAL; }
+const expCap = () => ENDLESS ? 9999 : 5;
+const maxLevel = () => ENDLESS ? Infinity : 3;
+const levelOf = exp => exp >= 5 ? (ENDLESS ? 3 + Math.floor((exp - 5) / 3) : 3) : exp >= 2 ? 2 : 1;
+// the squares under a card: merges collected towards the next level
+function expProgress(exp) {
+  exp = exp || 0;
+  const L = levelOf(exp);
+  if (L === 1) return { have: exp, need: 2 };
+  if (L === 2) return { have: exp - 2, need: 3 };
+  if (!ENDLESS) return { have: 0, need: 0 };
+  return { have: (exp - 5) % 3, need: 3 };
+}
 const hasTag = (u, t) => (UNITS[u.id].tags || []).includes(t);
 let UID = 1;
 
@@ -29,18 +44,19 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
   const pick = arr => arr[Math.floor(rng() * arr.length)];
   let cloneNo = 1 + Math.floor(rng() * 104);
   const frames = [];
-  const stats = { cloneKills: 0 };
+  // cloneKills = enemy (side B) units that died, killsA = your side's deaths. "nike inc status" counts the first.
+  const stats = { cloneKills: 0, killsA: 0 };
   let pendingFx = [], pendingCap = null, pendingSfx = [];
 
   const mk = (u, side) => ({
-    uid: UID++, srcUid: u.uid, id: u.id, name: UNITS[u.id].name, atk: u.atk, hp: u.hp,
+    uid: UID++, srcUid: u.uid, id: u.id, name: UNITS[u.id].name, atk: u.atk, hp: u.hp, exp: u.exp || 0,
     lvl: levelOf(u.exp || 0), item: u.item, side, flags: {}, baseAtk: u.atk, maxHp: u.hp, dead: false
   });
   const T = { A: teamA.filter(Boolean).map(u => mk(u, 'A')), B: teamB.filter(Boolean).map(u => mk(u, 'B')) };
   T.A.concat(T.B).forEach(u => { if (u.id === 'clonetoken') u.name = 'giuseppe n.' + (cloneNo++ % 104 + 1); });
 
   const snap = () => {
-    const cp = side => T[side].map(u => ({ uid: u.uid, id: u.id, name: u.name, atk: u.atk, hp: Math.max(0, u.hp), lvl: u.lvl, item: u.item, dead: u.dead }));
+    const cp = side => T[side].map(u => ({ uid: u.uid, id: u.id, name: u.name, atk: u.atk, hp: Math.max(0, u.hp), lvl: u.lvl, exp: u.exp, item: u.item, dead: u.dead }));
     frames.push({ A: cp('A'), B: cp('B'), fx: pendingFx, cap: pendingCap, sfx: pendingSfx });
     pendingFx = []; pendingCap = null; pendingSfx = [];
   };
@@ -107,7 +123,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       const behind = t[idx];
       const killer = died.lastHitBy;
       pendingFx.push({ uid: died.uid, type: 'faint', side, killerId: killer && killer.side !== side ? killer.id : null, killerUid: killer && killer.side !== side ? killer.uid : null, banned: !!died.flags.banned });
-      if (hasTag(died, 'nike')) stats.cloneKills++;
+      if (side === 'B') stats.cloneKills++; else stats.killsA++;
       pendingCap = pendingCap || (killer && killer.side !== died.side && rng() < 0.5
         ? fill(pick(CAPTIONS.ko), { k: killer.name, n: died.name })
         : fill(pick(CAPTIONS.faint), { n: died.name }));
@@ -192,12 +208,13 @@ function buildBotTeam(turn, rng) {
     const weighted = pool.filter(k => rng() < 0.35 + UNITS[k].tier / (maxTier + 1));
     const id = (weighted.length ? weighted : pool)[Math.floor(rng() * (weighted.length || pool.length))];
     const u = newUnit(id);
-    const exp = Math.min(5, Math.floor(rng() * (turn / 2.5)));
+    const exp = Math.min(expCap(), Math.floor(rng() * (turn / 2.5)));
     u.exp = exp; u.atk += exp; u.hp += exp;
     team.push(u);
   }
   // spend "food" budget
   let budget = Math.floor((turn - 1) * 1.6);
+  if (ENDLESS && turn > 12) budget = Math.floor(11 * 1.6 + (turn - 12) * 2.6); // endless: bots keep growing
   while (budget-- > 0) { const u = team[Math.floor(rng() * team.length)]; if (rng() < 0.5) u.atk++; else u.hp++; }
   if (turn >= 4) {
     const eq = Object.keys(ITEMS).filter(k => ITEMS[k].equip && ITEMS[k].tier <= maxTier);
@@ -207,3 +224,25 @@ function buildBotTeam(turn, rng) {
   team.forEach(u => { u.atk = Math.min(MAX_STAT, u.atk); u.hp = Math.min(MAX_STAT, u.hp); });
   return team;
 }
+
+// ============================================================
+//  The final boss: Giuseppe and the Nike Inc. militia ("104 dead, 1 to go").
+//  Front of the team first. Only used in endless mode, so the higher stat cap applies.
+// ============================================================
+function buildBossTeam() {
+  const mk = (id, atk, hp, exp, item) => newUnit(id, { atk: Math.min(MAX_STAT, atk), hp: Math.min(MAX_STAT, hp), exp, item });
+  return [
+    mk('noproblem', BOSS.a1, BOSS.h1, BOSS.exp, 'keys'),
+    mk('g0',        BOSS.a2, BOSS.h2, BOSS.exp, 'petronas'),
+    mk('agartha',   BOSS.a3, BOSS.h3, BOSS.exp, 'negev'),
+    mk('gjr',       BOSS.a4, BOSS.h4, BOSS.exp, 'ghostgun'),
+    mk('giuseppe',  BOSS.a5, BOSS.h5, BOSS.exp + 3, 'vnegev'),
+  ];
+}
+// Tuned by simulation: a team needs roughly 58+ in every stat on all five units (level 4, with a negev) to beat it.
+const BOSS = { exp: 13, a1: 56, h1: 44, a2: 60, h2: 56, a3: 64, h3: 56, a4: 56, h4: 60, a5: 68, h5: 76 };
+
+// The "veterans market": if you rebuild before the final wave you get REBUILD.gold and a shop of
+// pre-levelled tier 5-6 characters (a fresh deck can't otherwise get anywhere near the boss).
+const REBUILD = { gold: 60, bonus: 50, exp: 8, minTier: 5, shop: 6 };
+const mkVeteran = id => newUnit(id, { atk: UNITS[id].atk + REBUILD.bonus, hp: UNITS[id].hp + REBUILD.bonus, exp: REBUILD.exp });
