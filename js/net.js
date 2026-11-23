@@ -21,7 +21,7 @@ const NET = {
     this.peer = new Peer(NET_PREFIX + this.code);
     this.peer.on('open', id => {
       this.myId = id; this.active = true;
-      this.addPlayer(id, name);
+      this.addPlayer(id, name, CHAT.profileFor(name));
       this.peer.on('connection', conn => this.hostAccept(conn));
       this.showLobby();
     });
@@ -35,13 +35,14 @@ const NET = {
       const conn = this.peer.connect(NET_PREFIX + this.code, { reliable: true });
       this.conn = conn;
       const t = setTimeout(() => this.fail('could not reach room ' + this.code + '. check the code'), 12000);
-      conn.on('open', () => { clearTimeout(t); this.active = true; conn.send({ t: 'hello', name }); });
+      conn.on('open', () => { clearTimeout(t); this.active = true; conn.send({ t: 'hello', name, prof: CHAT.profileFor(name) }); });
       conn.on('data', m => this.onMessage(m));
       conn.on('close', () => { if (this.active) this.fail('the host left. and you cry'); });
     });
     this.peer.on('error', e => this.fail(e.type === 'peer-unavailable' ? 'room ' + this.code + ' not found' : 'connection error: ' + e.type));
   },
   reset() {
+    CHAT.clear();
     try { if (this.peer) this.peer.destroy(); } catch (e) {}
     clearInterval(this.timerInt); clearTimeout(this.hostTimeout);
     Object.assign(this, { active: false, isHost: false, peer: null, conn: null, conns: {}, players: {}, order: [], turn: 0, phase: 'lobby', pendingTurn: null, lastBattle: null });
@@ -68,8 +69,8 @@ const NET = {
   },
 
   // ---------- host side ----------
-  addPlayer(id, name) {
-    this.players[id] = { id, name: name.slice(0, 16) || 'player', lives: NET_LIVES, wins: 0, alive: true, team: [], ready: false, done: false, connected: true };
+  addPlayer(id, name, prof) {
+    this.players[id] = { id, prof: CHAT.cleanProf(prof), name: name.slice(0, 16) || 'player', lives: NET_LIVES, wins: 0, alive: true, team: [], ready: false, done: false, connected: true };
     this.order.push(id);
   },
   hostAccept(conn) {
@@ -89,7 +90,7 @@ const NET = {
       if (this.phase !== 'lobby') { conn && conn.send({ t: 'error', msg: 'that game already started' }); return; }
       if (this.order.length >= MAX_PLAYERS) { conn && conn.send({ t: 'error', msg: 'room is full (8 players)' }); return; }
       this.conns[from] = conn;
-      this.addPlayer(from, m.name);
+      this.addPlayer(from, m.name, m.prof);
       this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code });
     } else if (m.t === 'ready') {
       const p = this.players[from]; if (!p || this.phase !== 'shop') return;
@@ -98,6 +99,8 @@ const NET = {
       this.hostCheckProgress();
     } else if ((m.t === 'sd_vote' || m.t === 'sd_pick') && this.sd) {
       this.hostHandleSd(from, m);
+    } else if (m.t === 'chat') {
+      CHAT.hostRelay(from, m);
     } else if (m.t === 'done') {
       const p = this.players[from]; if (p) p.done = true;
       this.hostCheckProgress();
@@ -196,6 +199,7 @@ const NET = {
     if (m.packs) this.packs = m.packs;
     if (m.t === 'lobby') { this.lobbyPlayers = m.players; if (this.phase === 'lobby') this.showLobby(m.msg); else if (m.msg) toast(m.msg); }
     else if (m.t === 'error') this.fail(m.msg);
+    else if (m.t === 'chat') CHAT.receive(m);
     else if (m.t === 'status') { $('#net-wait-count') && ($('#net-wait-count').textContent = `${m.ready}/${m.total} ready`); }
     else if (m.t === 'turn') this.onTurn(m);
     else if (m.t === 'battles') this.onBattles(m);

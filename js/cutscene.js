@@ -136,7 +136,7 @@ const CUT = {
   },
 
   // turns the player on. big = centred and larger (watching it again from the achievements page)
-  open(key, big) {
+  open(key, big, noAch) {
     this.close(true);
     const c = CUTSCENES[key]; if (!c) return null;
     const el = document.createElement('div');
@@ -148,7 +148,7 @@ const CUT = {
     v.src = c.src;
     v.volume = Math.min(1, Audio2.volume / 0.6);
     v.muted = Audio2.muted;
-    this.el = el; this.v = v; this.active = true; this.key = key; this.seen = false;
+    this.el = el; this.v = v; this.active = true; this.key = key; this.seen = false; this.noAch = !!noAch;
     Audio2.setDuck(DUCK_LEVEL, 220);
     const p = v.play(); if (p && p.catch) p.catch(() => { v.muted = true; v.play().catch(() => {}); });
     v.addEventListener('playing', () => { this.seen = true; }, { once: true });
@@ -160,7 +160,7 @@ const CUT = {
   // fast = no animation (skipping the battle)
   close(fast) {
     const el = this.el; if (!el) return;
-    const v = this.v, key = this.key, seen = this.seen;
+    const v = this.v, key = this.key, seen = this.seen && !this.noAch; this.noAch = false;
     this.el = null; this.v = null; this.active = false; this.lastOn = false;
     if (this.sd) { clearInterval(this.sd.timer); this.sd = null; }
     Audio2.setDuck(1, fast ? 150 : 1100);

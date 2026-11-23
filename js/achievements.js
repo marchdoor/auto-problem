@@ -282,7 +282,7 @@ const ACH = {
         html += `<div class="ach t-${a.tier}${locked ? ' locked' : ''}">
           ${this.iconHTML(a, locked)}
           <div class="ach-body"><h4>${hide ? '???' : a.name}<span class="ach-tier">${a.tier === 'red' ? 'special' : a.tier}</span></h4>
-          <div class="ach-desc">${hide ? a.hint : a.desc}</div>${extra}</div></div>`;
+          <div class="ach-desc">${hide ? a.hint : a.desc}</div>${CHAT.rewardLine(a, done, hide)}${extra}</div></div>`;
       });
     });
     html += `</div>`;

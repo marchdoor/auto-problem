@@ -44,7 +44,7 @@ Object.assign(UNITS, {
     text: L => `zombie. ${Math.round(100 * (0.15 + 0.1 * L))}% chance to avoid an attack completely (higher with levels)`
   },
   bigz: {
-    name: 'big man (unturned)', tier: 5, atk: 6, hp: 16, img: 'bigz.png', tags: ['zombie'], pack: 'unturned', bleed: 0.1, on: {},
+    name: 'big nigga', tier: 5, atk: 6, hp: 16, img: 'bigz.png', tags: ['zombie'], pack: 'unturned', bleed: 0.1, on: {},
     text: L => `zombie. very tanky. he winds up for a turn, then throws a rock on the next. each rock has a ${Math.round(100 * (0.12 + 0.04 * L))}% chance to kill on the spot`
   },
 });
