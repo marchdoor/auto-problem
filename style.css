@@ -208,7 +208,7 @@ h1 span { display: block; font-size: .42em; color: var(--accent); letter-spacing
 }
 
 /* responsive card sizing */
-#battle { --card-w: clamp(64px, calc((100vw - 200px) / 10 - 12px), 124px); }
+#battle { --card-w: clamp(24px, calc((100vw - 220px) / (2 * var(--n, 5)) / 1.1), 124px); }
 #shop { --card-w: clamp(76px, calc((100vw - 260px) / 8 - 14px), 124px); }
 #battle .slot, #shop .slot { height: calc(var(--card-w) + 82px); }
 .item-card { width: calc(var(--card-w) * .82); }
@@ -388,7 +388,7 @@ html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparen
 /* phones held sideways: short screens */
 @media (max-height: 520px) and (min-width: 561px) {
   :root, #shop, #battle { --card-w: min(84px, calc((100vh - 120px) / 2 - 76px)); }
-  #battle { --card-w: min(90px, calc(100vh - 250px), calc((100vw - 110px) / 10 - 10px)); }
+  #battle { --card-w: min(90px, calc(100vh - 250px), calc((100vw - 120px) / (2 * var(--n, 5)) / 1.1)); }
   #battle .bteam { gap: 8px; }
   #battle .lane { gap: 10px; padding: 0 10px; }
   #battle .vs { font-size: 26px; }
@@ -518,3 +518,20 @@ body.endless .wins-max { display: none; }
 .boss-box .sd-choices { margin: 14px 0 4px; }
 .boss-box .sd-choices button { width: 340px; }
 @media (max-width: 760px) { .boss-box .sd-choices button { width: auto; } .boss-box .sd-title { font-size: 40px !important; } }
+
+/* more than 5 units on a side (clones): on phones the extra ones wrap onto a second row */
+@media (max-width: 760px) { .bteam { flex-wrap: wrap; row-gap: 6px; } }
+
+/* desktop battles: when there are many units (clones) everything on the cards scales with the card width */
+@media (min-width: 761px) {
+  #battle .bteam { gap: calc(var(--card-w) * .1); }
+  #battle .card .pic { border-width: clamp(1px, calc(var(--card-w) * .025), 3px); box-shadow: calc(var(--card-w) * .04) calc(var(--card-w) * .04) 0 #000; }
+  #battle .card .nm { font-size: clamp(5px, calc(var(--card-w) * .105), 13px); left: 2px; right: 2px; bottom: 2px; }
+  #battle .badge { min-width: calc(var(--card-w) * .36); height: calc(var(--card-w) * .3); font-size: clamp(7px, calc(var(--card-w) * .2), 22px); border-width: clamp(1px, calc(var(--card-w) * .02), 2px); box-shadow: 1px 1px 0 #000; }
+  #battle .card .stats { margin-top: calc(var(--card-w) * .06); }
+  #battle .card .lvl { font-size: clamp(5px, calc(var(--card-w) * .095), 12px); margin-top: calc(var(--card-w) * .04); }
+  #battle .card .lvl i { width: clamp(3px, calc(var(--card-w) * .08), 10px); height: clamp(3px, calc(var(--card-w) * .08), 10px); border-width: 1px; }
+  #battle .card .itm { width: calc(var(--card-w) * .3); height: calc(var(--card-w) * .3); top: calc(var(--card-w) * -.1); right: calc(var(--card-w) * -.1); font-size: calc(var(--card-w) * .16); }
+}
+
+@media (max-width: 760px) { .side-name { padding-bottom: 12px; } }

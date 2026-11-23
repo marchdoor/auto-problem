@@ -230,7 +230,7 @@ const UNITS = {
   // ---------------- TIER 6 ----------------
   giuseppe: {
     name: 'm° giuseppe creatore', tier: 6, atk: 6, hp: 7, img: 'giuseppe', tags: ['nike'],
-    text: L => `<b>start of battle:</b> summon ${L} clones (${2 * L}/${2 * L}). <b>faint:</b> respawn once. its over when i say its over`,
+    text: L => `<b>start of battle:</b> summon ${L} clones (${2 * L}/${2 * L}). <b>faint:</b> respawn once and call ${L} more clones. its over when i say its over`,
     on: {
       startBattle(c, u, L) {
         c.sfx('giuseppe'); c.caption('he just trolls');
@@ -240,6 +240,8 @@ const UNITS = {
         if (!u.flags.respawned) {
           const n = c.summon(u.side, idx, 'giuseppe', Math.max(1, Math.ceil(u.baseAtk / 2)), 3 * L);
           if (n) { n.flags.respawned = true; n.flags.noSummon = true; c.sfx('giuseppe'); c.caption('its over when i say its over'); }
+          // his clones come out as well, even if the field is already full
+          for (let i = 0; i < L; i++) c.summon(u.side, idx + 1, 'clonetoken', 2 * L, 2 * L);
         }
       }
     }

@@ -11,6 +11,10 @@ function setEndless(on) { ENDLESS = !!on; MAX_STAT = ENDLESS ? MAX_STAT_ENDLESS 
 const expCap = () => ENDLESS ? 9999 : 5;
 const maxLevel = () => ENDLESS ? Infinity : 3;
 const levelOf = exp => exp >= 5 ? (ENDLESS ? 3 + Math.floor((exp - 5) / 3) : 3) : exp >= 2 ? 2 : 1;
+// the least experience a unit needs to be a given level (endless: 3 per level after level 2)
+const expForLevel = L => L <= 1 ? 0 : L === 2 ? 2 : 5 + 3 * (L - 3);
+// the most units a side can have on the field in a battle. Your team is still 5, but clones can go past it.
+const MAX_FIELD = 10;
 // the squares under a card: merges collected towards the next level
 function expProgress(exp) {
   exp = exp || 0;
@@ -95,7 +99,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     },
     summon(side, idx, id, atk, hp) {
       const alive = T[side].filter(u => !u.dead);
-      if (alive.length >= 5) return null;
+      if (alive.length >= MAX_FIELD) return null;
       const n = mk({ id, atk, hp, exp: 0 }, side);
       n.uid = UID++;
       if (id === 'clonetoken') n.name = 'giuseppe n.' + (cloneNo++ % 104 + 1);
@@ -244,5 +248,7 @@ const BOSS = { exp: 13, a1: 56, h1: 44, a2: 60, h2: 56, a3: 64, h3: 56, a4: 56, 
 
 // The "veterans market": if you rebuild before the final wave you get REBUILD.gold and a shop of
 // pre-levelled tier 5-6 characters (a fresh deck can't otherwise get anywhere near the boss).
+// If you keep your team for the final wave, every unit gets this (once per run).
+const KEEP_BONUS = { stat: 30, levels: 5 };
 const REBUILD = { gold: 60, bonus: 50, exp: 8, minTier: 5, shop: 6 };
 const mkVeteran = id => newUnit(id, { atk: UNITS[id].atk + REBUILD.bonus, hp: UNITS[id].hp + REBUILD.bonus, exp: REBUILD.exp });

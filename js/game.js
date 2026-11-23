@@ -100,12 +100,26 @@ function bossChoice() {
     <p>giuseppe creatore and the nike inc. militia are coming. this is what you'll face:</p>
     <div class="sd-team" id="boss-team"></div>
     <div class="sd-choices">
-      <button class="big" id="boss-keep">keep my team<small>normal shop · ${START_GOLD} gold</small></button>
+      <button class="big" id="boss-keep">keep my team<small>${S.keepBonusGiven ? '' : `every unit gets +${KEEP_BONUS.stat}/+${KEEP_BONUS.stat} and +${KEEP_BONUS.levels} levels · `}normal shop · ${START_GOLD} gold</small></button>
       <button class="big danger" id="boss-new">rebuild<small>sell the team · ${REBUILD.gold} gold · veterans market (tier ${REBUILD.minTier}-6, level ${levelOf(REBUILD.exp)}, +${REBUILD.bonus}/+${REBUILD.bonus})</small></button>
     </div></div>`);
   $('#modal-close').classList.add('hidden');
   const row = $('#boss-team'); boss.forEach(u => { u.lvl = levelOf(u.exp); row.appendChild(cardEl(u)); });
-  $('#boss-keep').onclick = () => { S.bossChosen = true; Audio2.play('click'); closeModal(); saveRun(); renderShop(); };
+  $('#boss-keep').onclick = () => {
+    S.bossChosen = true; Audio2.play('click');
+    if (!S.keepBonusGiven) {
+      // the final wave bonus for staying with your deck (once per run)
+      S.keepBonusGiven = true;
+      S.team.filter(Boolean).forEach(u => {
+        const L = lvl(u);
+        u.atk = Math.min(MAX_STAT, u.atk + KEEP_BONUS.stat); u.hp = Math.min(MAX_STAT, u.hp + KEEP_BONUS.stat);
+        u.exp += expForLevel(L + KEEP_BONUS.levels) - expForLevel(L);
+        logBuff(u, KEEP_BONUS.stat, KEEP_BONUS.stat, 'final wave');
+      });
+      toast(`final wave bonus: +${KEEP_BONUS.stat}/+${KEEP_BONUS.stat} and +${KEEP_BONUS.levels} levels`);
+    }
+    closeModal(); saveRun(); renderShop();
+  };
   $('#boss-new').onclick = () => {
     S.bossChosen = true; S.rebuild = true;
     S.team = [null, null, null, null, null]; S.gold = REBUILD.gold; S.shop.units = []; S.shop.items = [];
@@ -451,6 +465,8 @@ function setBattleBg(seed) {
 }
 
 function renderBattleTeams(f) {
+  // clones can push a side past 5 units: size the cards for however many there are
+  $('#battle').style.setProperty('--n', Math.max(5, f.A.length, f.B.length));
   const draw = (el, team, side) => {
     el.innerHTML = '';
     team.forEach(u => { const c = cardEl(u); c.dataset.side = side; el.appendChild(c); });
@@ -678,7 +694,8 @@ function howToPlay() {
     <li><b>freeze</b> a shop card to keep it for the next turn. <b>sell</b> gives gold equal to the level.</li>
     <li>press <b>end turn</b>: the battle plays by itself. fronts hit each other at the same time until one team is empty.</li>
     <li>win <b>10</b> battles to end the line. lose <b>5</b> and you cry. after 10 trophies you can end the run, or keep going in <b>endless</b>.</li>
-    <li><b>endless</b>: levels never stop growing (3 merges per level after level 2) and the stat cap is higher. keep going until you've killed all <b>104</b> (see "nike inc status"). then the <b>final wave</b> comes: giuseppe and the nike inc. militia. before it you can keep your team, or sell it and rebuild with ${REBUILD.gold} gold in a veterans market.</li>
+    <li><b>endless</b>: levels never stop growing (3 merges per level after level 2) and the stat cap is higher. keep going until you've killed all <b>104</b> (see "nike inc status"). then the <b>final wave</b> comes: giuseppe and the nike inc. militia. before it you can keep your team (every unit gets +${KEEP_BONUS.stat}/+${KEEP_BONUS.stat} and +${KEEP_BONUS.levels} levels, once per run), or sell it and rebuild with ${REBUILD.gold} gold in a veterans market.</li>
+    <li>clones can go past 5 units on the field (up to 10 per side): giuseppe jr., giuseppe creatore and clone factories keep spawning even when your team is full.</li>
     <li>the game starts in black and white and gets more colour the closer you get to the end. just like the series.</li>
     <li>new tiers unlock every 2 turns. <b>nike</b> characters take double damage from john tanner.</li>
   </ul>`);
