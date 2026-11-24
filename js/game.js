@@ -186,7 +186,7 @@ function randomUnitId(maxTier) {
   return pick(pool);
 }
 function randomItemId(maxTier) {
-  return pick(Object.keys(ITEMS).filter(k => ITEMS[k].tier <= maxTier && packOk(ITEMS[k])));
+  return pick(Object.keys(ITEMS).filter(k => ITEMS[k].tier <= maxTier && packOk(ITEMS[k]) && !itemBanned(k)));
 }
 // a shop item. food gets a random freshness (1-100%)
 function newItemEntry(tier) {
@@ -276,6 +276,7 @@ function shopKill(target) {
   });
   S.team = [null, null, null, null, null];
   out.slice(0, 5).forEach((x, i) => { S.team[i] = x; });
+  if (res.negevBan) applyNegevBan(true);
   Audio2.play('faint');
   (res.caps.length ? res.caps : [`${UNITS[target.id].name} is died`]).slice(0, 3).forEach(t => toast(t));
 }
@@ -288,6 +289,7 @@ function useItem(itemIdx, slot) {
   S.gold -= itemCost(it); S.shop.items.splice(itemIdx, 1);
   ACH.item(entry.id);
   if (it.kill) { shopKill(u); sel = null; saveRun(); renderShop(); return; }
+  if (entry.id === 'vcall' && isCeo(u)) { feedCeo(u); Audio2.play('item'); sel = null; saveRun(); renderShop(); return; }
   if (it.equip) { u.item = entry.id; toast(`${UNITS[u.id].name} equips ${it.name}`); }
   else {
     const times = u.item === 'chef' ? 2 : 1;   // chef skill: food and buffs work twice
@@ -299,6 +301,19 @@ function useItem(itemIdx, slot) {
   }
   Audio2.play('item');
   sel = null; saveRun(); renderShop();
+}
+
+// the vodafone call is food for the vodafone ceo: stats x2 and +1 level (x1.3 and no level at level 3).
+// the first one turns him into vodafone ceo prime
+function feedCeo(u) {
+  const L = lvl(u), mul = L >= 3 ? 1.3 : 2;
+  const da = Math.round(u.atk * (mul - 1)), dh = Math.round(u.hp * (mul - 1));
+  const a0 = u.atk, h0 = u.hp;
+  u.atk = capAdd(u.atk, da); u.hp = capAdd(u.hp, dh);
+  logBuff(u, u.atk - a0, u.hp - h0, 'vodafone call');
+  if (u.id === 'vodafone') { u.id = 'vodafoneprime'; toast('woto tolff becomes vodafone ceo prime'); }
+  else toast(`vodafone ceo prime eats the call: x${mul}`);
+  if (L < maxLevel()) { u.exp = Math.min(expCap(), Math.max(u.exp, expForLevel(L + 1))); onLevelUp(u); }
 }
 
 function moveTeam(from, to) {
@@ -497,7 +512,7 @@ function pickOpponent() {
   const ghosts = store.get('np_ghosts', []).filter(g => g.turn === S.turn && g.run !== S.runId && g.team.every(u => UNITS[u.id]));
   if (ghosts.length && Math.random() < 0.4) {
     const g = pick(ghosts);
-    return { name: `ghost: ${g.name}`, team: g.team.map(u => newUnit(u.id, { atk: u.atk, hp: u.hp, exp: u.exp, item: u.item })) };
+    return { name: `ghost: ${g.name}`, team: g.team.map(u => newUnit(u.id, { atk: u.atk, hp: u.hp, exp: u.exp, item: itemBanned(u.item) ? null : u.item })) };
   }
   const seed = Math.floor(Math.random() * 1e9);
   return { name: pick(TEAM_NAMES), team: buildBotTeam(S.turn, mulberry32(seed)) };
@@ -544,6 +559,7 @@ async function endTurn(forced) {
   await playBattle(res.frames, { result: res.result, seed, sudden: sdSim });
   applyFusions(res.fusions, 'A');
   applyTentLoss(res.tentLost, 'A');
+  if (res.stats.negevBan) applyNegevBan();
 
   S.nikeKills += res.stats.cloneKills;
   finishBattle(res.result, isBoss, sdSim);
@@ -566,11 +582,22 @@ function applyFusions(list, side) {
     if (iJ < 0 || iT < 0) return;
     const at = Math.min(iJ, iT);
     S.team[iJ] = null; S.team[iT] = null;
-    S.team[at] = newUnit('jahntonner', { atk: f.atk, hp: f.hp, exp: f.exp, item: f.item });
-    try { localStorage.setItem('np_secret_jahn', '1'); } catch (e) {}
-    ACH.unlock('jahntonner');
-    toast('tanner john and john tanner fused into jahn tonner');
+    const into = f.into || 'jahntonner';
+    S.team[at] = newUnit(into, { atk: f.atk, hp: f.hp, exp: f.exp, item: f.item });
+    try { localStorage.setItem(into === 'vodafone' ? 'np_secret_woto' : 'np_secret_jahn', '1'); } catch (e) {}
+    ACH.unlock(into === 'vodafone' ? 'wototolff' : 'jahntonner');
+    toast(into === 'vodafone' ? 'the iliad ceo and the vodafone call fused into woto tolff' : 'tanner john and john tanner fused into jahn tonner');
   });
+}
+
+// dr. funnyheimer / barbie venom died with a negev on the field: it is gone from every team and banned for the run
+function applyNegevBan(quiet) {
+  if (!S) return;
+  S.noItems = S.noItems || {};
+  S.noItems.negev = true;
+  (S.team || []).forEach(u => { if (u && u.item === 'negev') u.item = null; });
+  if (S.shop && S.shop.items) S.shop.items = S.shop.items.filter(x => x.id !== 'negev');
+  if (!quiet) toast('the negev is banned for the rest of the run');
 }
 
 // make tent bro: the holder never came back because the rest of its team died first
@@ -879,9 +906,9 @@ function howToPlay() {
 
 function codex() {
   let html = `<h2>all characters</h2><div class="codex">`;
-  let found = false; try { found = localStorage.getItem('np_secret_jahn') === '1'; } catch (e) {}
+  const foundOf = k => { try { return localStorage.getItem(k === 'vodafone' ? 'np_secret_woto' : 'np_secret_jahn') === '1'; } catch (e) { return false; } };
   for (let t = 1; t <= 7; t++) {
-    const list = Object.entries(UNITS).filter(([k, d]) => d.tier === t && !d.token && (!d.secret || found) && packOk(d));
+    const list = Object.entries(UNITS).filter(([k, d]) => d.tier === t && !d.token && (!d.secret || foundOf(k)) && packOk(d));
     if (!list.length) continue;
     html += `<div class="codex-tier">tier ${t}</div>`;
     list.forEach(([k, d]) => {

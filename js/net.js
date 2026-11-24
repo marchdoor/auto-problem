@@ -443,6 +443,7 @@ const NET = {
     S.nikeKills += mineIsA ? res.stats.cloneKills : res.stats.killsA;
     applyFusions(res.fusions, mineIsA ? 'A' : 'B');
     applyTentLoss(res.tentLost, mineIsA ? 'A' : 'B');
+    if (res.stats.negevBan) applyNegevBan();
     this.showResult(result, m.players);
   },
   // spectators and eliminated players watch the other players' battles. buttons switch between them.

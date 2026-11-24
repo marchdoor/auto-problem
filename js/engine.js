@@ -26,6 +26,8 @@ function expProgress(exp) {
   if (!ENDLESS) return { have: 0, need: 0 };
   return { have: (exp - 5) % 3, need: 3 };
 }
+// items banned for the rest of the run (funnyheimer / barbie venom ban the negev)
+const itemBanned = k => typeof S !== 'undefined' && !!S && !!S.noItems && !!S.noItems[k];
 const hasTag = (u, t) => (UNITS[u.id].tags || []).includes(t);
 let UID = 1;
 
@@ -51,7 +53,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
   let cloneNo = 1 + Math.floor(rng() * 104);
   const frames = [];
   // cloneKills = enemy (side B) units that died, killsA = your side's deaths. "nike inc status" counts the first.
-  const stats = { cloneKills: 0, killsA: 0 };
+  const stats = { cloneKills: 0, killsA: 0, negevBan: false };
   let pendingFx = [], pendingCap = null, pendingSfx = [];
 
   const mk = (u, side) => ({
@@ -133,12 +135,14 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     },
     damage(t, amt, src, kind) {
       if (shopMode || !t || t.dead || amt <= 0) return 0;
+      if (kind === 'burn' && isCeo(t)) return 0;   // the vodafone ceo is immune to the vodafone call
       if (turn0 && t.item === 'insideman') { c.fx(t, 'ability'); return 0; }
       if (turn0 && t.item === 'carjack' && !t.flags.carUsed && src && src.side !== t.side && !src.dead) {
         t.flags.carUsed = true; c.fx(t, 'ability'); c.caption(`carjack: ${t.name} flips it back at ${src.name}`); const o = t; t = src; src = o;
       }
       if (t.id === 'miamiz' && kind === 'atk' && rng() < 0.15 + 0.1 * t.lvl) { c.fx(t, 'ability'); c.caption(`${t.name} dodges`); return 0; }
       if (src && src.id === 'john' && hasTag(t, 'nike')) amt *= 2;
+      if (src && src.id === 'john' && isCeo(t)) amt *= 2;
       if (src && src.id === 'jahntonner' && hasTag(t, 'nike')) amt *= 3;
       if (src && src.id === 'alqaida' && hasTag(t, 'mib')) amt *= 2;
       if (t.item === 'petronas' && !['burn', 'bleed', 'poison'].includes(kind)) amt = Math.max(1, amt - 2);
@@ -190,13 +194,33 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       noSummon = !!died.flags.revived;
       trigger(died, 'faint', idx);
       noSummon = false;
-      if (died.item === 'vcall') { burn += 3; pendingCap = 'vodafone call: everyone is burning'; pendingSfx.push('nuke'); }
+      // dr. funnyheimer and barbie venom: every negev on the field is deleted and the item is banned for the run
+      if (died.id === 'funny' || died.id === 'venom') {
+        const hs = T.A.concat(T.B).filter(x => x.item === 'negev');
+        if (died.item === 'negev') hs.push(died);
+        if (hs.length) {
+          hs.forEach(x => { x.item = null; c.fx(x, 'ability'); });
+          pendingFx.push({ uid: died.uid, type: 'negevban', who: died.id });
+          stats.negevBan = true;
+          pendingCap = `${died.name} deletes every negev. the negev is banned for the rest of the run`; pendingSfx.push('nuke');
+        }
+      }
+      if (died.item === 'vcall') {
+        burn += 3; pendingCap = 'vodafone call: everyone is burning'; pendingSfx.push('nuke');
+        // the vodafone ceo is immune to the call and doubles his stats for the battle
+        const ceos = c.all().filter(isCeo);
+        if (ceos.length) {
+          ceos.forEach(x => c.buff(x, x.atk, x.hp));
+          pendingFx.push({ uid: ceos[0].uid, type: 'vcallceo' });
+          pendingCap = 'vodafone call: the ceo is immune and doubles his stats';
+        }
+      }
       if (died.item === 'heli') { pendingCap = `${died.name}'s helicopter crashes on everyone`; pendingSfx.push('nuke'); c.all().forEach(x => c.damage(x, 4, died, 'heli')); }
       if (died.item === 'reebok') { const e = c.front(c.other(side)); if (e) { c.damage(e, 4, died, 'reebok'); c.caption(`${died.name}'s car has been reebooked`); pendingSfx.push('nuke'); } }
       t.filter(u => !u.dead).forEach(f => trigger(f, 'friendFaint'));
       if (behind && !behind.dead && t.includes(behind)) trigger(behind, 'friendAheadFaint');
       // no problem i will personally deal with it: the friend in front fell, so this one gets angry
-      if (behind && !behind.dead && t.includes(behind) && behind.item === 'personally') { c.buff(behind, 3 * behind.lvl, 0); pendingCap = 'no problem i will deal personally with it'; }
+      if (behind && !behind.dead && t.includes(behind) && behind.item === 'personally') { c.buff(behind, 3 * behind.lvl, behind.id === 'crosos' ? 3 * behind.lvl : 0); pendingCap = 'no problem i will deal personally with it'; }
       if (killer && !killer.dead && killer.side !== side && T[killer.side].includes(killer)) trigger(killer, 'knockout');
       // crosos ritual: comes back once, same level, half attack and half health (its faint effects already happened)
       if (died.item === 'ritual' && !died.flags.revived && !died.flags.banned && t.filter(u => !u.dead).length < fieldCap) {
@@ -216,6 +240,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     return {
       shop: T.A.filter(u => !u.dead).map(u => ({ srcUid: u.srcUid, id: u.id, atk: u.atk, hp: u.hp, exp: u.exp, item: u.item || null })),
       caps: frames.map(f => f.cap).filter(Boolean),
+      negevBan: stats.negevBan,
     };
   }
 
@@ -237,6 +262,22 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     t.splice(Math.min(at, t.length), 0, f); c.fx(f, 'summon');
     fusions.push({ side, uids: [j.srcUid, tj.srcUid], atk, hp, exp, item });
     pendingCap = 'tanner john and john tanner fuse into jahn tonner'; pendingSfx.push('giuseppe');
+    snap();
+  }
+  // secret: a level 3 iliad ceo and a friend holding a vodafone call fuse into woto tolff (the vodafone ceo), stats added up
+  for (const side of ['A', 'B']) {
+    const t = T[side];
+    const il = t.find(u => u.id === 'iliad' && u.exp >= 5 && !u.dead);
+    const vh = il && t.find(u => u !== il && u.item === 'vcall' && !u.dead);
+    if (!il || !vh) continue;
+    const at = Math.min(t.indexOf(il), t.indexOf(vh));
+    const atk = Math.min(MAX_STAT, il.atk + vh.atk), hp = Math.min(MAX_STAT, il.hp + vh.hp), exp = il.exp;
+    c.fx(il, 'absorb'); c.fx(vh, 'absorb');
+    t.splice(t.indexOf(il), 1); t.splice(t.indexOf(vh), 1);
+    const f = mk({ id: 'vodafone', atk, hp, exp, item: null }, side); f.uid = UID++;
+    t.splice(Math.min(at, t.length), 0, f); c.fx(f, 'summon');
+    fusions.push({ side, uids: [il.srcUid, vh.srcUid], atk, hp, exp, item: null, into: 'vodafone' });
+    pendingCap = 'the iliad ceo answers the vodafone call. woto tolff is here'; pendingSfx.push('giuseppe');
     snap();
   }
   // sudden death card bans: the banned cards die before anything else (their faint abilities still trigger)
@@ -475,7 +516,7 @@ function buildBotTeam(turn, rng) {
   if (ENDLESS && turn > 12) budget = Math.floor(11 * 1.6 + (turn - 12) * 2.6); // endless: bots keep growing
   while (budget-- > 0) { const u = team[Math.floor(rng() * team.length)]; if (rng() < 0.5) u.atk++; else u.hp++; }
   if (turn >= 4) {
-    const eq = Object.keys(ITEMS).filter(k => ITEMS[k].equip && ITEMS[k].tier <= maxTier && packOk(ITEMS[k]));
+    const eq = Object.keys(ITEMS).filter(k => ITEMS[k].equip && ITEMS[k].tier <= maxTier && packOk(ITEMS[k]) && !itemBanned(k));
     const n = Math.floor(rng() * Math.min(3, turn / 3));
     for (let i = 0; i < n; i++) team[Math.floor(rng() * team.length)].item = eq[Math.floor(rng() * eq.length)];
   }

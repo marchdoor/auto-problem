@@ -22,6 +22,29 @@ CUTSCENES.g44venom = { src: 'assets/cutscenes/giuseppe44killsbarbievenom.mp4', d
 CUTSCENES.clone84 = { src: 'assets/cutscenes/giuseppeclonen84killedbyjannertohn.mp4', dur: 5.7, ach: 'cut_clone84', title: 'giuseppe n.84' };
 CUTSCENES.johnjannerebook = { src: 'assets/cutscenes/johnjannerebook.mp4', dur: 6.18, ach: 'cut_johnjanner', title: 'john, janner and the rebook' };
 CUTSCENES.noprobjohn = { src: 'assets/cutscenes/noproblemkillsjohntanner.mp4', dur: 10.2, ach: 'cut_noprobjohn', title: 'no problem vs john tanner' };
+// videos that may not be in assets/cutscenes yet. They are probed at load: a missing file is simply never planned,
+// and a present one gets its real length from the file, so nothing has to be edited when a video is added.
+const PENDING_CUTS = {
+  johnfree: ['johntannerfreeedit.mp4', 'cut_johnfree', 'john tanner free edit'],
+  john71: ['johntannerkillsclonenumber71.mp4', 'cut_john71', 'john tanner vs giuseppe n.71'],
+  noyes5: ['noproblem5killsplus.mp4', 'cut_noyes5', 'no problem / yes problem (5+)'],
+  crososdarius: ['crososkillsdarius.mp4', 'cut_crososdarius', 'crosos vs secretary darius'],
+  kenjinuke: ['kenjiwithrebooknuke.mp4', 'cut_kenjinuke', 'kenji and the rebook nuke'],
+  nfsg44: ['nfsmafiakillsgiuseppe44.mp4', 'cut_nfsg44', 'nfs mafia vs giuseppe 44'],
+  wotocall: ['vodafoneceocallused.mp4', 'cut_wotocall', 'the vodafone call'],
+  johnsoon: ['johndiessoon.mp4', 'cut_johnsoon', 'john dies soon'],
+  funnynegev: ['funnyheimernegevban.mp4', 'cut_funnyneg', 'funnyheimer deletes the negev'],
+  venomnegev: ['venomnegevban.mp4', 'cut_venomneg', 'venom deletes the negev'],
+};
+Object.entries(PENDING_CUTS).forEach(([k, [f, ach, title]]) => {
+  const c = CUTSCENES[k] = { src: 'assets/cutscenes/' + f, dur: 6, ach, title, pending: true, ok: false };
+  try {
+    const v = document.createElement('video'); v.preload = 'metadata'; v.muted = true;
+    v.addEventListener('loadedmetadata', () => { if (v.duration && isFinite(v.duration)) { c.dur = v.duration; c.ok = true; } });
+    v.addEventListener('error', () => { c.ok = false; });
+    v.src = c.src;
+  } catch (e) {}
+});
 const DUCK_LEVEL = 0.15;   // other sounds keep 15% (85% quieter) while the video plays
 
 const CUT = {
@@ -41,7 +64,7 @@ const CUT = {
     const attackFrame = (uid, d) => { for (let j = d; j >= 0; j--) if (frames[j].fx.some(x => x.type === 'attack' && x.uid === uid)) return j; return d; };
     const firstAttack = (uid, d) => { for (let j = 0; j <= d; j++) if (frames[j].fx.some(x => x.type === 'attack' && x.uid === uid)) return j; return d; };
     const rosterHas = (side, ids, d) => ids.every(id => { for (let j = 0; j <= d; j++) if ((side === 'A' ? frames[j].A : frames[j].B).some(u => u.id === id)) return true; return false; });
-    const add = (c) => { if (c && !this.played(c.key) && !out.some(o => o.key === c.key)) out.push(c); };
+    const add = (c) => { if (c && !this.played(c.key) && !(CUTSCENES[c.key].pending && !CUTSCENES[c.key].ok) && !out.some(o => o.key === c.key)) out.push(c); };
 
     // 1. john tanner vs the vodafone ceo, front to front: the one who dies decides the video
     for (let i = 0; i < frames.length; i++) {
@@ -61,7 +84,7 @@ const CUT = {
     // 2. giuseppe 1, 2 or 4 kills gavin collins or the vodafone ceo, with both of them on that team
     // 3. bondo 2, bondo 2 prime or cigga nover kills giuseppe 1
     // 4. no problem or yes problem gets 3 or more kills: the video starts when they start attacking and ends at their last kill
-    const killCount = {};
+    const killCount = {}, johnKills = {};
     for (let d = 0; d < frames.length; d++) {
       for (const x of frames[d].fx) {
         if (x.type !== 'faint' || !x.killerId) continue;
@@ -70,8 +93,17 @@ const CUT = {
           add({ k: attackFrame(x.killerUid, d), d, key: 'giuseppekill' });
         if (['bondo2', 'bondo2prime', 'ciggan'].includes(x.killerId) && victim === 'giuseppe')
           add({ k: attackFrame(x.killerUid, d), d, key: 'bondokill' });
+        // john tanner kills 3 or more: the video starts on his first attack and ends with his last kill
+        if (x.killerId === 'john') {
+          const jk = (johnKills[x.killerUid] = (johnKills[x.killerUid] || 0) + 1);
+          if (jk >= 3) {
+            const ex = out.find(o => o.key === 'johnfree' && o.uid === x.killerUid);
+            if (ex) ex.d = d; else add({ k: firstAttack(x.killerUid, d), d, key: 'johnfree', uid: x.killerUid, pri: 2 });
+          }
+        }
         if (['noproblem', 'yesproblem'].includes(x.killerId)) {
           const kc = (killCount[x.killerUid] = (killCount[x.killerUid] || 0) + 1);
+          if (kc >= 5) add({ k: 0, d: 0, key: 'noyes5', uid: x.killerUid, pri: 99 });   // plays at the start of the battle
           if (kc >= 3) {   // 3, 4, 5... kills: the video runs until the last of them
             const ex = out.find(o => o.key === 'noyes3' && o.uid === x.killerUid);
             if (ex) ex.d = d; else add({ k: firstAttack(x.killerUid, d), d, key: 'noyes3', uid: x.killerUid });
@@ -92,6 +124,14 @@ const CUT = {
         if (victim === 'crosos' && x.killerId && isG(x.killerId)) add({ k: attackFrame(x.killerUid, d), d, key: 'crososdies' });
         // 6. giuseppe n.44 kills barbie venom
         if (victim === 'venom' && x.killerId === 'g44') add({ k: attackFrame(x.killerUid, d), d, key: 'g44venom' });
+        // john tanner kills giuseppe n.71
+        if (x.killerId === 'john' && nameOf[x.uid] === 'giuseppe n.71') add({ k: attackFrame(x.killerUid, d), d, key: 'john71', pri: 3 });
+        // sgt. crosos kills secretary darius
+        if (victim === 'darius' && x.killerId === 'crosos') add({ k: attackFrame(x.killerUid, d), d, key: 'crososdarius', pri: 2 });
+        // a member of the nfs mafia kills giuseppe n°44: the video runs on his death turn
+        if (victim === 'g44' && ['troop', 'nfsvp'].includes(x.killerId)) add({ k: attackFrame(x.killerUid, d), d, key: 'nfsg44', pri: 2 });
+        // john tanner is going to die to a nike inc unit: played at the start of the battle
+        if (victim === 'john' && x.killerId && ((UNITS[x.killerId] || {}).tags || []).includes('nike')) add({ k: 0, d: 0, key: 'johnsoon', pri: 40 });
         // 7. janner tohn kills giuseppe n.84 (a numbered clone)
         if (x.killerId === 'janner' && nameOf[x.uid] === 'giuseppe n.84') add({ k: attackFrame(x.killerUid, d), d, key: 'clone84', pri: 3 });
         // 8. no problem kills john tanner: the video starts the turn before
@@ -114,6 +154,15 @@ const CUT = {
     // janner tohn are on the bomber's team, that video plays right after it explodes instead.
     frames.forEach((f, b) => f.fx.forEach(x => {
       if (x.type !== 'bomb') return;
+      // lt. kenji's rebook nuke is going to kill no problem or yes problem: played at the start of the battle (instead of the plain rebook video)
+      if (idOf[x.owner] === 'kenji') {
+        let kd = -1;
+        for (let j = b; j < frames.length; j++) {
+          if (j > b && frames[j].fx.some(y => y.type === 'attack')) break;
+          if (frames[j].fx.some(y => y.type === 'faint' && y.killerUid === x.owner && ['noproblem', 'yesproblem'].includes(idOf[y.uid]))) { kd = j; break; }
+        }
+        if (kd >= 0) { add({ k: 0, d: 0, key: 'kenjinuke', pri: 50 }); return; }
+      }
       const mine = f[x.ownerSide] || [];
       const both = ['john', 'janner'].every(id => mine.some(u => u.id === id && !u.dead));
       if (both && !this.played('johnjannerebook')) { add({ k: b, d: b, key: 'johnjannerebook', after: true, pri: 3 }); return; }
@@ -126,6 +175,14 @@ const CUT = {
       let plant = 0; for (let j = 0; j <= b; j++) if (frames[j].fx.some(y => y.type === 'plant' && y.owner === x.owner)) { plant = j; break; }
       add({ k: Math.max(plant, d - 14), d, key: 'rebookboom' });
     }));
+
+    // vodafone call goes off with the vodafone ceo on the field / funnyheimer or venom delete the negev: played right after it happens
+    frames.forEach((f, i) => f.fx.forEach(x => {
+      if (x.type === 'vcallceo') add({ k: i, d: i, key: 'wotocall', after: true, pri: 4 });
+      if (x.type === 'negevban') add({ k: i, d: i, key: x.who === 'funny' ? 'funnynegev' : 'venomnegev', after: true, pri: 3 });
+    }));
+    // the 5+ kills video replaces the 3+ one for the same unit
+    out.forEach((o, i) => { if (o.key === 'noyes3' && out.some(p => p.key === 'noyes5' && p.uid === o.uid)) out.splice(i, 1); });
 
     // one video at a time: rarer ones first (then earliest first), and skip any that would overlap
     out.sort((a, b) => (b.pri || 0) - (a.pri || 0) || a.k - b.k);

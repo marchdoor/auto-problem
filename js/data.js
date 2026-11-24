@@ -6,6 +6,10 @@
 //  Shop events:   buy, sell, startTurn, endTurn
 // ============================================================
 
+// the vodafone ceo is a secret: nothing about how to power him up is shown until he has been unlocked
+const wotoKnown = () => { try { return localStorage.getItem('np_secret_woto') === '1'; } catch (e) { return false; } };
+const isCeo = u => !!u && (u.id === 'vodafone' || u.id === 'vodafoneprime');
+
 const UNITS = {
   // ---------------- TIER 1 ----------------
   clone: {
@@ -70,7 +74,7 @@ const UNITS = {
   // ---------------- TIER 2 ----------------
   venom: {
     name: 'barbie venom', tier: 2, atk: 2, hp: 3, img: 'venom', tags: ['mib'],
-    text: L => `<b>faint:</b> give 2 random friends +${L}/+${L}. venom cries`,
+    text: L => `<b>faint:</b> give 2 random friends +${L}/+${L}. if a negev is on the field it is deleted from everyone holding it and banned for the rest of the run. venom cries`,
     on: {
       faint(c, u, L) { c.randomAllies(u.side, 2).forEach(f => c.buff(f, L, L)); c.caption('venom cries and nukes'); }
     }
@@ -107,28 +111,42 @@ const UNITS = {
   // ---------------- TIER 3 ----------------
   funny: {
     name: 'dr. funnyheimer', tier: 3, atk: 3, hp: 3, img: 'funny', tags: ['mib'],
-    text: L => `<b>faint:</b> negev nuke, deal ${2 * L} damage to EVERYONE. free sacrifice`,
+    text: L => `<b>faint:</b> negev nuke, deal ${2 * L} damage to EVERYONE. if a negev is on the field it is deleted from everyone holding it and banned for the rest of the run. free sacrifice`,
     on: {
       faint(c, u, L) { c.caption('free sacrifice and negev nuke'); c.sfx('nuke'); c.all().forEach(t => c.damage(t, 2 * L, u, 'nuke')); }
     }
   },
   crosos: {
-    name: 'sgt. crosos', tier: 3, atk: 3, hp: 4, img: 'crosos', tags: ['mib'],
-    text: L => `<b>start of battle:</b> betray the friend behind (${2 * L} damage) and gain +${2 * L} attack`,
+    name: 'sgt. crosos', tier: 3, atk: 4, hp: 5, img: 'crosos', tags: ['mib'],
+    text: L => `<b>start of battle:</b> betray the friend behind (always 2 damage) and gain +${2 * L} attack. with "no problem i will personally deal with it" he gains attack and health when the friend ahead falls`,
     on: {
       startBattle(c, u, L) {
         const b = c.behindOf(u); c.buff(u, 2 * L, 0);
-        if (b) { c.damage(b, 2 * L, u, 'betray'); c.caption('crosos springs a betrayal'); }
+        if (b) { c.damage(b, 2, u, 'betray'); c.caption('crosos springs a betrayal'); }
       }
     }
   },
   vodafone: {
-    name: 'woto tolff (vodafone ceo)', tier: 3, atk: 2, hp: 4, img: 'vodafone',
-    text: L => `<b>start of battle:</b> plant a chip on the strongest enemy, -${2 * L} attack. the rat, real name woto tolff`,
+    name: 'woto tolff (vodafone ceo)', tier: 6, atk: 5, hp: 7, img: 'vodafone', secret: true,
+    text: L => `<b>start of battle:</b> plant a chip on the strongest enemy, -${3 * L} attack, and -${L} attack for every other enemy. takes double damage from john tanner. immune to the vodafone call burn: when anyone's vodafone call goes off he doubles his stats for the battle. the rat, real name woto tolff${wotoKnown() ? '. <b>vodafone call:</b> use it on him as food. stats x2 and +1 level (x1.3 at level 3). the first one makes him vodafone ceo prime' : ''}`,
     on: {
       startBattle(c, u, L) {
+        const foes = c.team(c.other(u.side)).filter(e => !e.dead);
         const e = c.strongestEnemy(u.side);
-        if (e) { c.debuff(e, 2 * L, u); c.caption(`woto tolff plants vodafone chip on ${e.name}`); }
+        if (e) { c.debuff(e, 3 * L, u); c.caption(`woto tolff plants vodafone chip on ${e.name}`); }
+        foes.forEach(f => { if (f !== e) c.debuff(f, L, u); });
+      }
+    }
+  },
+  vodafoneprime: {
+    name: 'vodafone ceo prime', tier: 6, atk: 5, hp: 7, img: 'vodafoneprime.png', secret: true, token: true,
+    text: L => `woto tolff, powered up. <b>start of battle:</b> plant a chip on the strongest enemy, -${3 * L} attack, and -${L} attack for every other enemy. takes double damage from john tanner. immune to the vodafone call burn: when anyone's vodafone call goes off he doubles his stats for the battle. the vodafone call works on him as food (x2 and +1 level, x1.3 at level 3)`,
+    on: {
+      startBattle(c, u, L) {
+        const foes = c.team(c.other(u.side)).filter(e => !e.dead);
+        const e = c.strongestEnemy(u.side);
+        if (e) { c.debuff(e, 3 * L, u); c.caption(`vodafone ceo prime plants vodafone chip on ${e.name}`); }
+        foes.forEach(f => { if (f !== e) c.debuff(f, L, u); });
       }
     }
   },
@@ -147,7 +165,7 @@ const UNITS = {
     }
   },
   mlk: {
-    name: 'martin luther link', tier: 3, atk: 2, hp: 2, img: 'mlk',
+    name: 'martin luther link', tier: 3, atk: 3, hp: 3, img: 'mlk',
     text: L => `<b>start of battle:</b> linkedin router deals ${L} damage to ALL enemies`,
     on: {
       startBattle(c, u, L) { c.team(c.other(u.side)).slice().forEach(e => c.damage(e, L, u, 'router')); }
