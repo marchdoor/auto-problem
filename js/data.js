@@ -127,20 +127,18 @@ const UNITS = {
     }
   },
   vodafone: {
-    name: 'woto tolff (vodafone ceo)', tier: 6, atk: 5, hp: 7, img: 'vodafone', secret: true,
-    text: L => `<b>start of battle:</b> plant a chip on the strongest enemy, -${3 * L} attack, and -${L} attack for every other enemy. takes double damage from john tanner. immune to the vodafone call burn: when anyone's vodafone call goes off he doubles his stats for the battle. the rat, real name woto tolff${wotoKnown() ? '. <b>vodafone call:</b> use it on him as food. stats x2 and +1 level (x1.3 at level 3). the first one makes him vodafone ceo prime' : ''}`,
+    name: 'woto tolff (vodafone ceo)', tier: 3, atk: 3, hp: 4, img: 'vodafone',
+    text: L => `<b>start of battle:</b> plant a chip on the strongest enemy, -${2 * L + 1} attack. takes double damage from john tanner. the rat, real name woto tolff${wotoKnown() ? '. <b>vodafone call:</b> if one is used on him (in the shop or in a battle) he becomes vodafone ceo prime' : ''}`,
     on: {
       startBattle(c, u, L) {
-        const foes = c.team(c.other(u.side)).filter(e => !e.dead);
         const e = c.strongestEnemy(u.side);
-        if (e) { c.debuff(e, 3 * L, u); c.caption(`woto tolff plants vodafone chip on ${e.name}`); }
-        foes.forEach(f => { if (f !== e) c.debuff(f, L, u); });
+        if (e) { c.debuff(e, 2 * L + 1, u); c.caption(`woto tolff plants vodafone chip on ${e.name}`); }
       }
     }
   },
   vodafoneprime: {
-    name: 'vodafone ceo prime', tier: 6, atk: 5, hp: 7, img: 'vodafoneprime.png', secret: true, token: true,
-    text: L => `woto tolff, powered up. <b>start of battle:</b> plant a chip on the strongest enemy, -${3 * L} attack, and -${L} attack for every other enemy. takes double damage from john tanner. immune to the vodafone call burn: when anyone's vodafone call goes off he doubles his stats for the battle. the vodafone call works on him as food (x2 and +1 level, x1.3 at level 3)`,
+    name: 'vodafone ceo prime', tier: 6, atk: 5, hp: 7, img: 'vodafoneprime.png', secret: true,
+    text: L => `woto tolff, powered up by the vodafone call. <b>start of battle:</b> plant a chip on the strongest enemy, -${3 * L} attack, and -${L} attack for every other enemy. takes double damage from john tanner. immune to the vodafone call burn: when anyone's vodafone call goes off in a battle he doubles his stats for that battle. the vodafone call is food for him in the shop`,
     on: {
       startBattle(c, u, L) {
         const foes = c.team(c.other(u.side)).filter(e => !e.dead);

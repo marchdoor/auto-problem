@@ -54,6 +54,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
   const frames = [];
   // cloneKills = enemy (side B) units that died, killsA = your side's deaths. "nike inc status" counts the first.
   const stats = { cloneKills: 0, killsA: 0, negevBan: false };
+  const primed = [];       // vodafone ceos turned into vodafone ceo prime by a call in this battle
   let pendingFx = [], pendingCap = null, pendingSfx = [];
 
   const mk = (u, side) => ({
@@ -210,7 +211,14 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
         // the vodafone ceo is immune to the call and doubles his stats for the battle
         const ceos = c.all().filter(isCeo);
         if (ceos.length) {
-          ceos.forEach(x => c.buff(x, x.atk, x.hp));
+          ceos.forEach(x => {
+            c.buff(x, x.atk, x.hp);
+            if (x.id === 'vodafone') {   // the first call turns him into vodafone ceo prime for good: +1 level, and he keeps the stats he has right now
+              x.id = 'vodafoneprime'; x.name = UNITS.vodafoneprime.name;
+              if (x.lvl < maxLevel()) { x.exp = Math.max(x.exp, expForLevel(x.lvl + 1)); x.lvl = levelOf(x.exp); }
+              primed.push({ side: x.side, uid: x.srcUid, atk: x.atk, hp: x.hp, exp: x.exp });
+            }
+          });
           pendingFx.push({ uid: ceos[0].uid, type: 'vcallceo' });
           pendingCap = 'vodafone call: the ceo is immune and doubles his stats';
         }
@@ -241,6 +249,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       shop: T.A.filter(u => !u.dead).map(u => ({ srcUid: u.srcUid, id: u.id, atk: u.atk, hp: u.hp, exp: u.exp, item: u.item || null })),
       caps: frames.map(f => f.cap).filter(Boolean),
       negevBan: stats.negevBan,
+      primed,
     };
   }
 
@@ -262,22 +271,6 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     t.splice(Math.min(at, t.length), 0, f); c.fx(f, 'summon');
     fusions.push({ side, uids: [j.srcUid, tj.srcUid], atk, hp, exp, item });
     pendingCap = 'tanner john and john tanner fuse into jahn tonner'; pendingSfx.push('giuseppe');
-    snap();
-  }
-  // secret: a level 3 iliad ceo and a friend holding a vodafone call fuse into woto tolff (the vodafone ceo), stats added up
-  for (const side of ['A', 'B']) {
-    const t = T[side];
-    const il = t.find(u => u.id === 'iliad' && u.exp >= 5 && !u.dead);
-    const vh = il && t.find(u => u !== il && u.item === 'vcall' && !u.dead);
-    if (!il || !vh) continue;
-    const at = Math.min(t.indexOf(il), t.indexOf(vh));
-    const atk = Math.min(MAX_STAT, il.atk + vh.atk), hp = Math.min(MAX_STAT, il.hp + vh.hp), exp = il.exp;
-    c.fx(il, 'absorb'); c.fx(vh, 'absorb');
-    t.splice(t.indexOf(il), 1); t.splice(t.indexOf(vh), 1);
-    const f = mk({ id: 'vodafone', atk, hp, exp, item: null }, side); f.uid = UID++;
-    t.splice(Math.min(at, t.length), 0, f); c.fx(f, 'summon');
-    fusions.push({ side, uids: [il.srcUid, vh.srcUid], atk, hp, exp, item: null, into: 'vodafone' });
-    pendingCap = 'the iliad ceo answers the vodafone call. woto tolff is here'; pendingSfx.push('giuseppe');
     snap();
   }
   // sudden death card bans: the banned cards die before anything else (their faint abilities still trigger)
@@ -489,7 +482,7 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
 
   const result = !T.A.length && !T.B.length ? 'draw' : !T.A.length ? 'lose' : !T.B.length ? 'win' : 'draw';
   const tentLost = hidden.filter(h => !h.back && !T[h.side].length).map(h => ({ side: h.side, uid: h.u.srcUid }));
-  return { frames, result, stats, fusions, tentLost };
+  return { frames, result, stats, fusions, tentLost, primed };
 }
 
 // ============================================================

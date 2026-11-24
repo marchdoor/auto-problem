@@ -40,9 +40,9 @@ const ACH_LIST = [
     desc: 'fuse john tanner with a level 3 tanner john. he is tier 7 and never appears in the shop.',
     hint: 'two old friends can become something bigger.' },
 
-  { id: 'wototolff', cat: 'secret', tier: 'red', name: 'woto tolff', img: 'units/vodafone.png', secret: true, unit: 'vodafone',
-    desc: 'fuse a level 3 iliad ceo with a friend holding a vodafone call. he never appears in the shop, and the vodafone call is food for him.',
-    hint: 'a rival picks up the phone.' },
+  { id: 'wototolff', cat: 'secret', tier: 'red', name: 'vodafone ceo prime', img: 'units/vodafoneprime.png', secret: true, unit: 'vodafoneprime',
+    desc: 'use a vodafone call on woto tolff, in the shop or in a battle. he becomes vodafone ceo prime. he never appears in the shop, and the vodafone call is food for him.',
+    hint: 'the rat answers the phone.' },
 
   // ---- cutscenes (you can watch them again here) ----
   { id: 'cut_john', cat: 'cutscenes', tier: 'red', name: 'the rat is caught', img: 'units/john.png', secret: true, video: 'johnwin',

@@ -303,17 +303,28 @@ function useItem(itemIdx, slot) {
   sel = null; saveRun(); renderShop();
 }
 
-// the vodafone call is food for the vodafone ceo: stats x2 and +1 level (x1.3 and no level at level 3).
-// the first one turns him into vodafone ceo prime
+// the vodafone call is food for the vodafone ceo: the stats boost of the call (x2, x1.3 at level 3).
+// the first one turns vodafone ceo into vodafone ceo prime and unlocks him
+function unlockWoto() { try { localStorage.setItem('np_secret_woto', '1'); } catch (e) {} ACH.unlock('wototolff'); }
 function feedCeo(u) {
-  const L = lvl(u), mul = L >= 3 ? 1.3 : 2;
+  const mul = lvl(u) >= 3 ? 1.3 : 2;
   const da = Math.round(u.atk * (mul - 1)), dh = Math.round(u.hp * (mul - 1));
   const a0 = u.atk, h0 = u.hp;
   u.atk = capAdd(u.atk, da); u.hp = capAdd(u.hp, dh);
   logBuff(u, u.atk - a0, u.hp - h0, 'vodafone call');
-  if (u.id === 'vodafone') { u.id = 'vodafoneprime'; toast('woto tolff becomes vodafone ceo prime'); }
+  if (u.id === 'vodafone') { u.id = 'vodafoneprime'; unlockWoto(); toast('woto tolff becomes vodafone ceo prime'); }
   else toast(`vodafone ceo prime eats the call: x${mul}`);
-  if (L < maxLevel()) { u.exp = Math.min(expCap(), Math.max(u.exp, expForLevel(L + 1))); onLevelUp(u); }
+}
+
+// a vodafone call went off in the battle and turned vodafone ceo into prime: he keeps his level and stats
+function applyPrimed(list, side) {
+  (list || []).filter(p => p.side === side).forEach(p => {
+    const u = S.team.find(x => x && x.uid === p.uid);
+    if (!u || u.id !== 'vodafone') return;
+    u.id = 'vodafoneprime'; u.atk = Math.min(MAX_STAT, p.atk); u.hp = Math.min(MAX_STAT, p.hp); u.exp = Math.min(expCap(), p.exp);
+    unlockWoto();
+    toast('the vodafone call turned woto tolff into vodafone ceo prime');
+  });
 }
 
 function moveTeam(from, to) {
@@ -558,6 +569,7 @@ async function endTurn(forced) {
   }
   await playBattle(res.frames, { result: res.result, seed, sudden: sdSim });
   applyFusions(res.fusions, 'A');
+  applyPrimed(res.primed, 'A');
   applyTentLoss(res.tentLost, 'A');
   if (res.stats.negevBan) applyNegevBan();
 
@@ -582,11 +594,10 @@ function applyFusions(list, side) {
     if (iJ < 0 || iT < 0) return;
     const at = Math.min(iJ, iT);
     S.team[iJ] = null; S.team[iT] = null;
-    const into = f.into || 'jahntonner';
-    S.team[at] = newUnit(into, { atk: f.atk, hp: f.hp, exp: f.exp, item: f.item });
-    try { localStorage.setItem(into === 'vodafone' ? 'np_secret_woto' : 'np_secret_jahn', '1'); } catch (e) {}
-    ACH.unlock(into === 'vodafone' ? 'wototolff' : 'jahntonner');
-    toast(into === 'vodafone' ? 'the iliad ceo and the vodafone call fused into woto tolff' : 'tanner john and john tanner fused into jahn tonner');
+    S.team[at] = newUnit('jahntonner', { atk: f.atk, hp: f.hp, exp: f.exp, item: f.item });
+    try { localStorage.setItem('np_secret_jahn', '1'); } catch (e) {}
+    ACH.unlock('jahntonner');
+    toast('tanner john and john tanner fused into jahn tonner');
   });
 }
 
@@ -906,7 +917,7 @@ function howToPlay() {
 
 function codex() {
   let html = `<h2>all characters</h2><div class="codex">`;
-  const foundOf = k => { try { return localStorage.getItem(k === 'vodafone' ? 'np_secret_woto' : 'np_secret_jahn') === '1'; } catch (e) { return false; } };
+  const foundOf = k => { try { return localStorage.getItem(k === 'vodafoneprime' ? 'np_secret_woto' : 'np_secret_jahn') === '1'; } catch (e) { return false; } };
   for (let t = 1; t <= 7; t++) {
     const list = Object.entries(UNITS).filter(([k, d]) => d.tier === t && !d.token && (!d.secret || foundOf(k)) && packOk(d));
     if (!list.length) continue;

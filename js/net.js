@@ -442,6 +442,7 @@ const NET = {
     await playBattle(frames, { result, seed: bt.seed, sudden: bt.sudden });
     S.nikeKills += mineIsA ? res.stats.cloneKills : res.stats.killsA;
     applyFusions(res.fusions, mineIsA ? 'A' : 'B');
+    applyPrimed(res.primed, mineIsA ? 'A' : 'B');
     applyTentLoss(res.tentLost, mineIsA ? 'A' : 'B');
     if (res.stats.negevBan) applyNegevBan();
     this.showResult(result, m.players);

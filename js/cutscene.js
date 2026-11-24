@@ -72,7 +72,7 @@ const CUT = {
       const atk = f.fx.filter(x => x.type === 'attack').map(x => x.uid);
       if (atk.length < 2) continue;
       const j = f.A.concat(f.B).find(u => atk.includes(u.uid) && u.id === 'john');
-      const v = f.A.concat(f.B).find(u => atk.includes(u.uid) && u.id === 'vodafone');
+      const v = f.A.concat(f.B).find(u => atk.includes(u.uid) && isCeo(u));
       if (!j || !v || (f.A.includes(j) === f.A.includes(v))) continue;
       for (let d = i; d < frames.length; d++) {
         const dead = frames[d].fx.filter(x => x.type === 'faint').map(x => x.uid);
@@ -89,7 +89,7 @@ const CUT = {
       for (const x of frames[d].fx) {
         if (x.type !== 'faint' || !x.killerId) continue;
         const victim = idOf[x.uid];
-        if (['giuseppe', 'g2', 'giuseppe4'].includes(x.killerId) && ['gavin', 'vodafone'].includes(victim) && rosterHas(x.side, ['gavin', 'vodafone'], d))
+        if (['giuseppe', 'g2', 'giuseppe4'].includes(x.killerId) && ['gavin', 'vodafone', 'vodafoneprime'].includes(victim) && (rosterHas(x.side, ['gavin', 'vodafone'], d) || rosterHas(x.side, ['gavin', 'vodafoneprime'], d)))
           add({ k: attackFrame(x.killerUid, d), d, key: 'giuseppekill' });
         if (['bondo2', 'bondo2prime', 'ciggan'].includes(x.killerId) && victim === 'giuseppe')
           add({ k: attackFrame(x.killerUid, d), d, key: 'bondokill' });
