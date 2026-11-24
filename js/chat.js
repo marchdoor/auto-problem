@@ -204,7 +204,7 @@ const CHAT = {
       const body = m.clip && CUTSCENES[m.clip]
         ? `<button class="chat-clipcard" data-k="${esc(m.clip)}"><i>▶</i><span><b>${esc(CUTSCENES[m.clip].title)}</b><small>tap to watch</small></span></button>`
         : `<div class="chat-text ${tx && tx.type === 'text' ? tx.id : ''}">${this.textHTML(m.text, tx && tx.id)}</div>`;
-      row.innerHTML = `<div class="chat-pfp"><img src="${/^u:/.test(prof.pfp) ? imgSrc(prof.pfp.slice(2)) : 'assets/units/' + PFP[prof.pfp]}" alt=""></div>
+      row.innerHTML = `<div class="chat-pfp"><img src="${/^u:/.test(prof.pfp) ? imgSrc(prof.pfp.slice(2)) : 'assets/units/' + PFP[prof.pfp]}" alt="" ${/^u:/.test(prof.pfp) ? 'class="top"' : ''}></div>
         <div class="chat-main"><div class="chat-name ${nm && nm.type === 'name' ? nm.id : ''}">${esc(m.name)}${esc(prof.suffix)}</div>
         <div class="chat-bubble" style="--bc:${bub && bub.type === 'bubble' ? bub.col : '#8a8f98'}">${body}</div></div>`;
       if (m.from !== me) row.querySelector('.chat-name').onclick = () => { this.muted[m.from] = true; toast(`muted ${m.name}. their messages are hidden until you leave the room`); this.draw(); };
