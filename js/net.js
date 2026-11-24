@@ -16,6 +16,7 @@ function peerOptions() {
 let TURN_SECONDS = 90;
 const MAX_PLAYERS = 8;
 let NET_LIVES = 5;
+const COOP_BOT_BOOST = 1;   // co-op bots play as if it was this many turns later
 
 const NET = {
   active: false, isHost: false, peer: null, conn: null, conns: {},
@@ -160,7 +161,7 @@ const NET = {
     if (this.phase === 'shop' && p.alive) {
       p.ready = false; p.done = false;
       const left = Math.max(10, Math.round((this.shopEnd - Date.now()) / 1000));
-      conn.send({ t: 'turn', turn: this.turn, seconds: left, songs: this.turnSongs, sudden: this.sd ? { mode: this.sd.mode } : null, restore: { team: p.team || [], wins: p.wins, lives: p.lives }, ...base });
+      conn.send({ t: 'turn', turn: this.turn, seconds: left, songs: this.turnSongs, sudden: this.sd ? { mode: this.sd.mode } : null, coop: this.coop ? this.coopInfo() : null, restore: { team: p.team || [], wins: p.wins, lives: p.lives }, ...base });
     } else conn.send({ t: 'wait', restore: { wins: p.wins, lives: p.lives }, ...base });
     this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code, msg: `${p.name} is back` });
     this.hostCheckProgress();
@@ -179,8 +180,11 @@ const NET = {
   aliveIds() { return this.order.filter(id => this.players[id].alive); },
   publicPlayers() { return this.order.map(id => { const p = this.players[id]; return { id, name: p.name, lives: p.lives, wins: p.wins, alive: p.alive, connected: p.connected, spec: !!p.spec, rdy: !!p.rdy }; }); },
   hostStart() {
-    if (this.order.filter(id => !this.players[id].spec).length < 2) return toast('need at least 2 players who play');
+    const playing = this.order.filter(id => !this.players[id].spec).length;
+    if (playing < 2) return toast('need at least 2 players who play');
     this.rules = setRules(this.rules);
+    this.coop = !!this.rules.coop;
+    if (this.coop && playing !== 2) return toast('co-op is for exactly 2 players. the others can spectate');
     this.order.forEach(id => { const p = this.players[id]; p.lives = NET_LIVES; p.wins = 0; p.alive = !p.spec; p.team = []; });
     this.phase = 'starting';
     this.playlist = newPlaylist();
@@ -190,7 +194,7 @@ const NET = {
     clearTimeout(this.hostTimeout);
     this.turn++;
     const alive = this.aliveIds();
-    const sudden = alive.length === 2 && alive.every(id => this.players[id].lives === 1);
+    const sudden = !this.coop && alive.length === 2 && alive.every(id => this.players[id].lives === 1);
     this.turnSongs = sudden ? { shop: SD_SONG, battle: SD_SONG } : { shop: nextSong(this.playlist), battle: nextSong(this.playlist) };
     this.sd = sudden ? { mode: null, votes: {}, picks: {}, bans: null, resolved: false } : null;
     this.hostStartShop();
@@ -205,7 +209,7 @@ const NET = {
     });
     this.shopEnd = Date.now() + TURN_SECONDS * 1000;
     this.broadcast({ t: 'turn', turn: this.turn, seconds: TURN_SECONDS, players: this.publicPlayers(), songs: this.turnSongs,
-                     sudden: this.sd ? { mode: this.sd.mode } : null });
+                     sudden: this.sd ? { mode: this.sd.mode } : null, coop: this.coop ? this.coopInfo() : null });
     // anyone who hasn't sent a team 15s after the timer keeps their last team
     this.hostTimeout = setTimeout(() => {
       this.aliveIds().forEach(id => { this.players[id].ready = true; });
@@ -220,9 +224,33 @@ const NET = {
     }
     else if (this.phase === 'battle' && this.order.every(id => this.players[id].done || !this.players[id].connected)) this.hostAfterBattles();
   },
+  // co-op: the 2 players share the gold. total gold split in half; with an odd total one gets the extra coin,
+  // and it swaps every round (11 coins: 5+6, then 6+5, ...)
+  coopIds() { return this.order.filter(id => !this.players[id].spec); },
+  coopInfo() {
+    const ids = this.coopIds(), total = START_GOLD, base = Math.floor(total / 2), odd = total % 2;
+    const gold = {}, names = {};
+    ids.forEach((id, i) => { gold[id] = base + (odd && (this.turn + i) % 2 === 0 ? 1 : 0); names[id] = this.players[id].name; });
+    return { gold, names };
+  },
+  hostRunCoop() {
+    const ids = this.coopIds(), [p1, p2] = ids.map(id => this.players[id]);
+    const seed = Math.floor(Math.random() * 1e9);
+    const bot = buildBotTeam(this.turn + COOP_BOT_BOOST, mulberry32(seed + 1)).map(u => ({ id: u.id, atk: u.atk, hp: u.hp, exp: u.exp, item: u.item, uid: u.uid }));
+    const teamA = [...(p1.team || []), ...(p2.team || [])].map((u, i) => ({ ...u, uid: i + 1 }));
+    const teamB = bot.map((u, i) => ({ ...u, uid: 100 + i }));
+    const nameB = 'the bots: ' + pick(TEAM_NAMES);
+    const result = simulateBattle(netTeam(teamA), netTeam(teamB), seed, {}).result;
+    if (result === 'win') { p1.wins++; p2.wins++; } else if (result === 'lose') { p1.lives--; p2.lives--; }
+    this.order.forEach(id => { const p = this.players[id]; if (p.lives <= 0) p.alive = false; p.done = !p.connected; });
+    const battles = [{ a: ids[0], a2: ids[1], b: 'bot', seed, teamA, teamB, nameA: `${p1.name} & ${p2.name}`, nameB, result, ban: null, sudden: false, coop: true }];
+    this.broadcast({ t: 'battles', turn: this.turn, battles, players: this.publicPlayers() });
+    this.hostTimeout = setTimeout(() => { this.order.forEach(id => { this.players[id].done = true; }); this.hostCheckProgress(); }, 60000);
+  },
   hostRunBattles() {
     clearTimeout(this.hostTimeout);
     this.phase = 'battle';
+    if (this.coop) return this.hostRunCoop();
     const ids = this.aliveIds().slice();
     for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
     const list = [];
@@ -258,7 +286,7 @@ const NET = {
     if (alive.length <= 1 || champ) {
       this.phase = 'over';
       const winner = champ || alive[0] || null;
-      this.broadcast({ t: 'end', winner, players: this.publicPlayers() });
+      this.broadcast({ t: 'end', winner, players: this.publicPlayers(), coop: !!this.coop, winners: this.coop && champ ? this.coopIds() : [] });
     } else this.hostNextTurn();
   },
   broadcast(m) {
@@ -323,7 +351,7 @@ const NET = {
     this.lobbyPlayers = m.players; this.phase = 'shop';
     if (m.packs) { this.packs = m.packs; setPacks(m.packs); }
     if (!S) S = { net: true, runId: 'net-' + this.myId, turn: 0, gold: START_GOLD, lives: NET_LIVES, wins: 0, team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [], packs: m.packs };
-    if (m.restore) this.restoreState(m.restore);
+    if (m.restore) { this.restoreState(m.restore); ACH.unlock('comeback'); }
     $('#hud-timer').classList.add('hidden');
     showScreen('battle');
     openModal(`<div style="text-align:center"><h2>you are back</h2><p class="cap-style" style="font-size:24px">wait a bit, the round in progress has to finish</p>${this.standingsHTML(m.players)}</div>`);
@@ -350,8 +378,17 @@ const NET = {
     S.turn = m.turn - 1;
     this.songs = m.songs || this.songs;
     this.sudden = m.sudden || null;
+    this.coopNow = m.coop || null;
     startTurn();
-    $('#hud-sd').classList.toggle('hidden', !this.sudden);
+    if (m.coop && m.coop.gold[this.myId] != null) {
+      S.gold = m.coop.gold[this.myId]; renderShop();
+      const other = Object.keys(m.coop.gold).find(id => id !== this.myId);
+      toast(`co-op with ${m.coop.names[other] || 'your partner'}: you get ${S.gold} 🪙 this round, they get ${m.coop.gold[other]}`);
+    }
+    $('#hud-sd').classList.toggle('hidden', !this.sudden && !m.coop);
+    $('#hud-sd').classList.toggle('coopb', !!m.coop && !this.sudden);
+    if (m.coop && !this.sudden) $('#hud-sd').textContent = '🤝 co-op vs the bots';
+    if (m.restore) ACH.unlock('comeback');
     if (this.sudden) { ACH.unlock('sudden'); $('#hud-sd').textContent = '☠ sudden death · last round'; toast('sudden death. after the shop you pick: remove a buff or ban a card'); }
     this.deadline = Date.now() + m.seconds * 1000;
     $('#hud-timer').classList.remove('hidden');
@@ -376,14 +413,15 @@ const NET = {
   async onBattles(m) {
     $('#modal').classList.add('hidden'); $('#modal-close').classList.remove('hidden');
     this.lobbyPlayers = m.players;
-    const bt = m.battles.find(b => b.a === this.myId || b.b === this.myId);
+    const bt = m.battles.find(b => b.a === this.myId || b.b === this.myId || b.a2 === this.myId);
     if (!S) { this.send({ t: 'done' }); return; }   // came back in the middle of a round
     if (!bt) { // already out, or spectating: watch a live battle
       this.send({ t: 'done' });
       this.watchBattles(m);
       return;
     }
-    const mineIsA = bt.a === this.myId;
+    const mineIsA = bt.a === this.myId || bt.a2 === this.myId;
+    REPLAY.keep(bt.teamA, bt.teamB, bt.seed, bt.ban, [bt.nameA, bt.nameB]); STATS.team(S.team);
     const res = simulateBattle(netTeam(bt.teamA), netTeam(bt.teamB), bt.seed, { ban: bt.ban });
     let frames = res.frames, result = res.result;
     if (!mineIsA) {
@@ -419,7 +457,7 @@ const NET = {
   },
   async watchBattles(m) {
     const tok = ++this.watchTok;
-    this.watching = true;
+    this.watching = true; ACH.unlock('spectated');
     let idx = Math.max(0, m.battles.findIndex(b => b.a === this.specPref || b.b === this.specPref));
     while (m.battles.length && tok === this.watchTok) {
       const bt = m.battles[idx];
@@ -454,6 +492,7 @@ const NET = {
   showResult(result, players) {
     const meP = this.me(players);
     S.lives = meP.lives; S.wins = meP.wins; setColour();
+    STATS.battle(result);
     ACH.afterBattle(result, { wins: meP.wins, lives: meP.lives, startLives: NET_LIVES, ghost: this.lastGhost, net: true });
     playResultTheme(result, this.lastSudden);
     $('#result-title').textContent = result;
@@ -483,14 +522,15 @@ const NET = {
   },
   onEnd(m) {
     clearInterval(this.timerInt); this.watchTok++; if (this.watching) skipping = true; this.specBar(null);
-    const win = m.winner === this.myId;
-    ACH.unlock('firstfriend'); if (win) ACH.unlock('beatfriend');
+    const win = m.coop ? (m.winners || []).includes(this.myId) : m.winner === this.myId;
+    ACH.unlock('firstfriend'); if (win) ACH.unlock(m.coop ? 'coopwin' : 'beatfriend');
+    STATS.online(win, !!m.coop);
     const w = m.players.find(p => p.id === m.winner);
     const show = () => {
       $('#result').classList.add('hidden'); $('#modal-close').classList.remove('hidden');
       if (win) document.documentElement.style.setProperty('--gray', '0');
       openModal(`<div style="text-align:center"><h2 style="font-size:64px">${win ? 'end of the line' : 'and you cry'}</h2>
-        <p class="cap-style" style="font-size:24px">${w ? w.name + ' ends the line' : 'nobody survives the darius nuke aftermath'}</p>
+        <p class="cap-style" style="font-size:24px">${m.coop ? (win ? 'you and your partner end the line' : 'the bots end the line') : w ? w.name + ' ends the line' : 'nobody survives the darius nuke aftermath'}</p>
         ${this.standingsHTML(m.players)}<div style="display:flex;gap:12px;justify-content:center">${this.isHost ? '<button class="big" id="net-rematch">rematch</button>' : ''}<button class="big" id="net-done">back to title</button></div>
         ${this.isHost ? '<p class="t">rematch: everyone goes back to the lobby with the same rules</p>' : '<p class="t">if the host starts a rematch, you will go back to the lobby</p>'}</div>`);
       Audio2.play(win ? 'win' : 'lose');
@@ -516,15 +556,16 @@ const NET = {
       ${msg ? `<p class="cap-style">${msg}</p>` : ''}
       <ul class="lobby-list">${players.map(p => `<li>${esc(p.name)}${p.id === this.myId ? ' (you)' : ''}${p.id === NET_PREFIX + this.code ? ' 👑' : ''}${p.spec ? '<span class="tag">👁 spectating</span>' : p.rdy ? '<span class="tag">✅ ready</span>' : ''}${this.isHost && p.id !== this.myId ? `<button class="kick" data-id="${esc(p.id)}" title="remove from the room">✕</button>` : ''}</li>`).join('')}</ul>
       <div class="lobby-me">${this.isHost ? '' : `<button id="lb-rdy" class="${meL && meL.rdy ? 'on' : ''}" ${meL && meL.spec ? 'disabled' : ''}>${meL && meL.rdy ? '✅ ready' : 'ready up'}</button>`}<button id="lb-spec" class="${meL && meL.spec ? 'on' : ''}" ${canSpec || (meL && meL.spec) ? '' : 'disabled'} title="needs 3 or more players in the room">${meL && meL.spec ? '👁 spectating (tap to play)' : '👁 spectate only'}</button></div>
-      ${players.length < 3 ? '<p class="t">spectate only unlocks when there are 3 or more players</p>' : ''}
+      ${players.length < 3 ? '<p class="t">spectate only unlocks when there are 3 or more players</p>' : ''}${rl.coop && playing !== 2 ? '<p class="t">co-op needs exactly 2 players who play (others can spectate)</p>' : ''}
       <div class="lobby-packs">${Object.entries(PACKS).map(([k, p]) => this.isHost ? `<label class="pack"><input type="checkbox" data-pk="${k}" ${pk[k] ? 'checked' : ''}><span><b>${p.name}</b> <small>${p.text}</small></span></label>` : `<p class="t">${p.name}: <b>${pk[k] ? 'on' : 'off'}</b></p>`).join('')}</div>
-      <div class="lobby-rules">${this.isHost ? `<label class="sp"><input type="checkbox" id="rk-special" ${rl.special ? 'checked' : ''}> <b>special mode</b> <small>best of 3 · veteran cards · fresh deck each round · ${SPMODE.gold} gold · game 3 is sudden death</small></label>` : (rl.special ? '<span class="sp"><b>special mode</b>: best of 3, veteran cards, fresh deck every round, game 3 is sudden death</span>' : '')}${rl.special ? '' : Object.entries(RULE_DEFS).map(([k, d]) => this.isHost ? `<label>${d.name} <select data-rk="${k}">${d.opts.map(o => `<option ${o === rl[k] ? 'selected' : ''}>${o}</option>`).join('')}</select></label>` : `<span>${d.name}: <b>${rl[k]}</b></span>`).join('')}</div>
+      <div class="lobby-rules">${this.isHost ? `<label class="sp"><input type="checkbox" id="rk-coop" ${rl.coop ? 'checked' : ''}> <b>co-op vs the bots</b> <small>2 players on the same side · they share the gold (${START_GOLD} split in half, the extra coin swaps each round) · shared hearts and trophies · you fight a bot team</small></label>` : (rl.coop ? '<span class="sp"><b>co-op vs the bots</b>: you and your partner share the gold, hearts and trophies</span>' : '')}${rl.coop ? '' : this.isHost ? `<label class="sp"><input type="checkbox" id="rk-special" ${rl.special ? 'checked' : ''}> <b>special mode</b> <small>best of 3 · veteran cards · fresh deck each round · ${SPMODE.gold} gold · game 3 is sudden death</small></label>` : (rl.special ? '<span class="sp"><b>special mode</b>: best of 3, veteran cards, fresh deck every round, game 3 is sudden death</span>' : '')}${rl.special ? '' : Object.entries(RULE_DEFS).map(([k, d]) => this.isHost ? `<label>${d.name} <select data-rk="${k}">${d.opts.map(o => `<option ${o === rl[k] ? 'selected' : ''}>${o}</option>`).join('')}</select></label>` : `<span>${d.name}: <b>${rl[k]}</b></span>`).join('')}</div>
       <p class="t">${players.length}/${MAX_PLAYERS} players · ${readyN}/${players.length} ready · first to ${WIN_TARGET} trophies wins, or last one standing</p>
-      <div style="display:flex;gap:12px">${this.isHost ? `<button class="big" id="net-start" ${playing < 2 ? 'disabled' : ''}>start game</button>` : ''}<button id="net-leave">leave</button></div>`);
+      <div style="display:flex;gap:12px">${this.isHost ? `<button class="big" id="net-start" ${playing < 2 || (rl.coop && playing !== 2) ? 'disabled' : ''}>start game</button>` : ''}<button id="net-leave">leave</button></div>`);
     $('#modal-close').classList.add('hidden');
     if (this.isHost) {
       $('#net-start').onclick = () => this.hostStart();
-      $('#rk-special').onchange = e => { this.rules.special = e.target.checked ? 1 : 0; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); };
+      $('#rk-coop').onchange = e => { this.rules.coop = e.target.checked ? 1 : 0; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); };
+      if ($('#rk-special')) $('#rk-special').onchange = e => { this.rules.special = e.target.checked ? 1 : 0; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); };
       document.querySelectorAll('.lobby-rules select').forEach(i => { i.onchange = () => { this.rules[i.dataset.rk] = +i.value; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });
       document.querySelectorAll('.lobby-packs input').forEach(i => { i.onchange = () => { this.packs[i.dataset.pk] = i.checked; savePackPrefs(this.packs); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });
     }

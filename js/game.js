@@ -29,7 +29,8 @@ const SPMODE = { gold: 40, bonus: 4, exp: 2, minTier: 3, units: 5, items: 3 };
 let SPECIAL_ON = false;
 function cleanRules(r) {
   const o = {}; r = r || {};
-  o.special = r.special ? 1 : 0;
+  o.coop = r.coop ? 1 : 0;
+  o.special = r.special && !o.coop ? 1 : 0;
   for (const k in RULE_DEFS) { const v = +r[k]; o[k] = RULE_DEFS[k].opts.includes(v) ? v : RULE_DEFS[k].def; }
   return o;
 }
@@ -97,11 +98,11 @@ function phaseSong(kind) {
   Audio2.playSong(nextSong(S.playlist));
 }
 
-function newRun(endless = false) {
-  setRules();
+function newRun(endless = false, rules = null) {
+  const rl = setRules(rules);
   setEndless(endless);
   S = { runId: Date.now() + '-' + Math.floor(Math.random() * 1e6), turn: 1, gold: START_GOLD, lives: START_LIVES, wins: 0,
-        team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [], endless: !!endless, packs: packPrefs(), curses: [] };
+        team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [], endless: !!endless, packs: packPrefs(), curses: [], rules: rl, custom: !!rules };
   setPacks(S.packs);
   rollShop(true);
   S.playlist = newPlaylist();
@@ -401,6 +402,7 @@ function renderShop() {
   setColour();
   $('#hud-gold').textContent = S.gold;
   $('#hud-lives').textContent = S.lives;
+  document.querySelectorAll('.wins-max').forEach(e => { e.textContent = '/' + WIN_TARGET; });
   $('#hud-wins').textContent = S.wins;
   $('#hud-turn').textContent = S.turn;
   const k = S.nikeKills;
@@ -524,6 +526,8 @@ async function endTurn(forced) {
   lastGhost = /^ghost/.test(opp.name);
   const seed = Math.floor(Math.random() * 1e9);
   const res = simulateBattle(S.team, opp.team, seed, { curses: S.curses || [] });
+  REPLAY.keep(S.team, opp.team, seed, null, ['you', opp.name], S.curses);
+  STATS.team(S.team);
   S.curses = [];
   const sdSim = typeof DEV !== 'undefined' && DEV.sdSim; if (sdSim) DEV.sdSim = false;   // dev: simulated sudden death
   setBattleBg(seed);
@@ -778,6 +782,7 @@ function finishBattle(result, isBoss, sudden) {
   if (result === 'win') { S.wins++; sub = S.endless ? `${S.wins} trophies` : `${S.wins}/${WIN_TARGET} trophies`; }
   else if (result === 'lose') { S.lives--; sub = `${S.lives} lives left`; }
   else { sub = 'nobody wins. untied ends.'; }
+  STATS.battle(result);
   ACH.afterBattle(result, { wins: S.wins, lives: S.lives, startLives: START_LIVES, endless: S.endless, boss: isBoss, rebuild: S.rebuild, ghost: lastGhost });
   // endless: 104 kills open the final wave
   let note = '';
@@ -819,6 +824,7 @@ function finishBattle(result, isBoss, sudden) {
 }
 
 function endRun(kind, boss) {
+  STATS.run(kind === 'victory', S.wins);
   store.del('np_run');
   const best = store.get('np_best', 0);
   if (S.wins > best) store.set('np_best', S.wins);
@@ -1002,7 +1008,7 @@ window.addEventListener('DOMContentLoaded', () => {
     S.shop.items = (S.shop.items || []).filter(e => e && ITEMS[e.id]);
     UID = 1 + Math.max(0, ...S.team.filter(Boolean).map(u => u.uid), ...S.shop.units.map(e => e.u.uid));
     setEndless(!!S.endless);
-    S.packs = S.packs || {}; S.curses = S.curses || []; setPacks(S.packs);
+    S.packs = S.packs || {}; S.curses = S.curses || []; setPacks(S.packs); setRules(S.rules);
     showScreen('shop'); renderShop(); phaseSong('shop');
     if (S.boss && !S.bossChosen) bossChoice();
   };

@@ -103,6 +103,10 @@ const ACH_LIST = [
 
   // ---- online ----
   { id: 'firstfriend', cat: 'online', tier: 'bronze', name: 'first friend', img: 'units/renault.png', desc: 'finish an online game.' },
+  { id: 'coopwin', cat: 'online', tier: 'silver', name: 'two heads', img: 'units/newman.png', desc: 'win a co-op game with a friend against the bots.' },
+  { id: 'spectated', cat: 'online', tier: 'bronze', name: 'front row seat', img: 'units/kitchen.png', desc: 'watch a live battle as a spectator.' },
+  { id: 'comeback', cat: 'online', tier: 'bronze', name: 'welcome back', img: 'units/paulwalter.png', desc: 'rejoin an online game after losing connection.' },
+  { id: 'replay', cat: 'online', tier: 'bronze', name: 'rewind', img: 'units/mlk.png', desc: 'watch a battle from a replay code.' },
   { id: 'beatfriend', cat: 'online', tier: 'silver', name: 'beat a friend', img: 'units/darius.png', desc: 'win an online game.' },
   { id: 'banhammer', cat: 'online', tier: 'silver', name: 'banhammer', img: 'units/kenji.png', desc: 'in sudden death, remove a buff from an enemy character.' },
   { id: 'mutual', cat: 'online', tier: 'silver', name: 'mutual destruction', img: 'units/crosos.png', desc: 'in sudden death, both players agree to ban a card from each team.' },
@@ -120,7 +124,7 @@ const ACH = {
   },
   save() { try { localStorage.setItem('np_ach', JSON.stringify(this.data)); } catch (e) {} },
   get: id => ACH_LIST.find(a => a.id === id),
-  blocked() { return typeof DEV !== 'undefined' && DEV.on && !DEV.ach; },
+  blocked() { return (typeof DEV !== 'undefined' && DEV.on && !DEV.ach) || (typeof REPLAYING !== 'undefined' && REPLAYING) || (typeof S !== 'undefined' && !!S && !!S.custom); },
   has(id) { return !!this.load().done[id]; },
   count() { const d = this.load(); return ACH_LIST.filter(a => d.done[a.id]).length; },
 

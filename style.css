@@ -734,3 +734,11 @@ body.endless .wins-max { display: none; }
 .lobby-me { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 6px 0; }
 .lobby-me button { border-radius: 16px; padding: 5px 14px; min-width: 0; font: 700 13px Arial; }
 .lobby-me button.on { border-color: #43e04f; box-shadow: 0 0 0 1px #43e04f; }
+
+#btn-replay { margin-top: 8px; border-radius: 16px; padding: 6px 16px; font: 700 14px Arial; }
+.stats-table td:last-child { text-align: right; }
+.stat-units { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.stat-units div { display: flex; gap: 8px; align-items: center; background: #151515; border: 1px solid var(--line); border-radius: 14px; padding: 6px 12px 6px 6px; }
+.stat-units img { width: 42px; height: 42px; object-fit: cover; border-radius: 10px; }
+.stat-units small { display: block; color: var(--muted); font-weight: 600; }
+#hud-sd.coopb { background: #12331b; border-color: #43e04f; color: #c6ffd0; }
