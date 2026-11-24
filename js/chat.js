@@ -37,7 +37,7 @@ const REWARDS = [
   { id: 't-tiny', type: 'text', name: 'tiny whisper text', ach: 'cut_noprobjohn' },
   { id: 't-blur', type: 'text', name: 'foggy text', ach: 'cut_clone84' },
 ];
-const PFP = { john: 'john.png', tannerjohn: 'tannerjohn.png', janner: 'janner.png', clone: 'clone.png', man: 'man.png', randomman: 'randomman.png', troop: 'troop.png', pennius: 'pennius.png' };
+const PFP = { jahn: 'jahntonner.png', john: 'john.png', tannerjohn: 'tannerjohn.png', janner: 'janner.png', clone: 'clone.png', man: 'man.png', randomman: 'randomman.png', troop: 'troop.png', pennius: 'pennius.png' };
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const CHAT = {
@@ -67,13 +67,24 @@ const CHAT = {
     const hashPick = () => { let h = 0; for (const ch of n) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return ['man', 'randomman', 'troop', 'pennius'][h % 4]; };
     if (/giu+s+e+p+e|giuse/.test(n)) return { pfp: 'clone', suffix: ` nº${1 + Math.floor(Math.random() * 104)}` };
     if (n.includes('janner') && ACH.load().done['cut_johnjanner']) return { pfp: 'janner', suffix: '' };
+    if ((n.includes('jahn') || n.includes('tonner')) && ACH.load().done['jahntonner']) return { pfp: 'jahn', suffix: '' };
+    // any other character: its name inside the username (4+ letters). secret ones need their achievement
+    const norm = s => String(s).toLowerCase().replace(/[^a-z]/g, '');
+    const stop = ['mafia', 'zombie', 'unturned', 'family', 'secretary', 'coach', 'giuseppe', 'clone', 'tonner', 'tanner', 'john', 'janner'];
+    const keys = k => [k, ...String(UNITS[k].name).split(/[^a-z0-9]+/i).map(norm)].filter(w => w.length >= 4 && !stop.includes(w));
+    let hit = null, best = 0;
+    Object.keys(UNITS).forEach(k => {
+      if (UNITS[k].token || !UNITS[k].img || (UNITS[k].secret && !ACH.load().done[k])) return;
+      keys(k).forEach(w => { if (n.includes(w) && w.length > best) { best = w.length; hit = k; } });
+    });
+    if (hit && UNITS[hit].img) return { pfp: 'u:' + hit, suffix: '' };
     if (n.includes('tanner')) return { pfp: pick(['john', 'tannerjohn']), suffix: '' };
     if (n.includes('john')) return { pfp: 'john', suffix: '' };
     return { pfp: hashPick(), suffix: '' };
   },
   cleanProf(p) {
     p = p || {};
-    return { pfp: PFP[p.pfp] ? p.pfp : 'man', suffix: /^ nº\d{1,3}$/.test(p.suffix || '') ? p.suffix : '' };
+    return { pfp: (PFP[p.pfp] || (/^u:/.test(p.pfp || '') && UNITS[p.pfp.slice(2)])) ? p.pfp : 'man', suffix: /^ nº\d{1,3}$/.test(p.suffix || '') ? p.suffix : '' };
   },
 
   // ---- sending / receiving ----
@@ -191,7 +202,7 @@ const CHAT = {
       const body = m.clip && CUTSCENES[m.clip]
         ? `<button class="chat-clipcard" data-k="${esc(m.clip)}"><i>▶</i><span><b>${esc(CUTSCENES[m.clip].title)}</b><small>tap to watch</small></span></button>`
         : `<div class="chat-text ${tx && tx.type === 'text' ? tx.id : ''}">${this.textHTML(m.text, tx && tx.id)}</div>`;
-      row.innerHTML = `<div class="chat-pfp"><img src="assets/units/${PFP[prof.pfp]}" alt=""></div>
+      row.innerHTML = `<div class="chat-pfp"><img src="${/^u:/.test(prof.pfp) ? imgSrc(prof.pfp.slice(2)) : 'assets/units/' + PFP[prof.pfp]}" alt=""></div>
         <div class="chat-main"><div class="chat-name ${nm && nm.type === 'name' ? nm.id : ''}">${esc(m.name)}${esc(prof.suffix)}</div>
         <div class="chat-bubble" style="--bc:${bub && bub.type === 'bubble' ? bub.col : '#8a8f98'}">${body}</div></div>`;
       const c = row.querySelector('.chat-clipcard'); if (c) c.onclick = () => this.watchClip(c.dataset.k);

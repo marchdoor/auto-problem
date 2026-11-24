@@ -715,3 +715,6 @@ body.endless .wins-max { display: none; }
 @keyframes chatShake { 25% { transform: translate(1px, -1px); } 50% { transform: translate(-1px, 1px); } 75% { transform: translate(1px, 1px); } }
 @keyframes chatFog { 50% { filter: blur(1.6px); } }
 .ach-rw { margin-top: 4px; font: 700 12px Arial; color: #ffd34d; }
+
+.lobby-rules { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; margin: 8px 0; font: 700 13px Arial; }
+.lobby-rules select { background: #000; color: #fff; border: 2px solid #fff; border-radius: 10px; padding: 2px 6px; font: 700 13px Arial; }

@@ -13,9 +13,9 @@ function peerOptions() {
     ...TURN_SERVERS, ...extra,
   ], iceCandidatePoolSize: 4 } };
 }
-const TURN_SECONDS = 90;
+let TURN_SECONDS = 90;
 const MAX_PLAYERS = 8;
-const NET_LIVES = 5;
+let NET_LIVES = 5;
 
 const NET = {
   active: false, isHost: false, peer: null, conn: null, conns: {},
@@ -119,6 +119,8 @@ const NET = {
   publicPlayers() { return this.order.map(id => { const p = this.players[id]; return { id, name: p.name, lives: p.lives, wins: p.wins, alive: p.alive, connected: p.connected }; }); },
   hostStart() {
     if (this.order.length < 2) return toast('need at least 2 players');
+    this.rules = setRules(this.rules);
+    this.order.forEach(id => { this.players[id].lives = NET_LIVES; });
     this.phase = 'starting';
     this.playlist = newPlaylist();
     this.hostNextTurn();
@@ -194,7 +196,7 @@ const NET = {
     } else this.hostNextTurn();
   },
   broadcast(m) {
-    if (this.isHost && (m.t === 'lobby' || m.t === 'turn')) m.packs = this.packs || packPrefs();
+    if (this.isHost && (m.t === 'lobby' || m.t === 'turn')) { m.packs = this.packs || packPrefs(); m.rules = this.rules = cleanRules(this.rules); }
     Object.values(this.conns).forEach(c => { try { c.send(m); } catch (e) {} });
     this.onMessage(m); // host is a player too
   },
@@ -206,6 +208,7 @@ const NET = {
   // ---------- every player ----------
   onMessage(m) {
     if (m.packs) this.packs = m.packs;
+    if (m.rules) { this.rules = setRules(m.rules); }
     if (m.t === 'lobby') { this.lobbyPlayers = m.players; if (this.phase === 'lobby') this.showLobby(m.msg); else if (m.msg) toast(m.msg); }
     else if (m.t === 'error') this.fail(m.msg);
     else if (m.t === 'chat') CHAT.receive(m);
@@ -359,16 +362,19 @@ const NET = {
     const players = this.isHost ? this.publicPlayers() : (this.lobbyPlayers || []);
     if (this.isHost && !this.packs) this.packs = Object.assign({}, packPrefs());
     const pk = this.packs || {};
+    const rl = this.rules = cleanRules(this.rules);
     openModal(`<h2>room <span class="room-code">${this.code}</span></h2>
       <p>${this.isHost ? 'send this code to your friends. they press <b>play online</b>, then <b>join</b>.' : 'connected. waiting for the host to start.'}</p>
       ${msg ? `<p class="cap-style">${msg}</p>` : ''}
       <ul class="lobby-list">${players.map(p => `<li>${p.name}${p.id === this.myId ? ' (you)' : ''}${p.id === NET_PREFIX + this.code ? ' 👑' : ''}</li>`).join('')}</ul>
       <div class="lobby-packs">${Object.entries(PACKS).map(([k, p]) => this.isHost ? `<label class="pack"><input type="checkbox" data-pk="${k}" ${pk[k] ? 'checked' : ''}><span><b>${p.name}</b> <small>${p.text}</small></span></label>` : `<p class="t">${p.name}: <b>${pk[k] ? 'on' : 'off'}</b></p>`).join('')}</div>
-      <p class="t">${players.length}/${MAX_PLAYERS} players · ${TURN_SECONDS}s per turn · ${NET_LIVES} lives · first to ${WIN_TARGET} wins or last one standing</p>
+      <div class="lobby-rules">${Object.entries(RULE_DEFS).map(([k, d]) => this.isHost ? `<label>${d.name} <select data-rk="${k}">${d.opts.map(o => `<option ${o === rl[k] ? 'selected' : ''}>${o}</option>`).join('')}</select></label>` : `<span>${d.name}: <b>${rl[k]}</b></span>`).join('')}</div>
+      <p class="t">${players.length}/${MAX_PLAYERS} players · first to ${WIN_TARGET} trophies wins, or last one standing</p>
       <div style="display:flex;gap:12px">${this.isHost ? `<button class="big" id="net-start" ${players.length < 2 ? 'disabled' : ''}>start game</button>` : ''}<button id="net-leave">leave</button></div>`);
     $('#modal-close').classList.add('hidden');
     if (this.isHost) {
       $('#net-start').onclick = () => this.hostStart();
+      document.querySelectorAll('.lobby-rules select').forEach(i => { i.onchange = () => { this.rules[i.dataset.rk] = +i.value; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });
       document.querySelectorAll('.lobby-packs input').forEach(i => { i.onchange = () => { this.packs[i.dataset.pk] = i.checked; savePackPrefs(this.packs); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });
     }
     $('#net-leave').onclick = () => this.leave();

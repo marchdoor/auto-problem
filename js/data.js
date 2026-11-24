@@ -60,7 +60,7 @@ const UNITS = {
     }
   },
   tohnjanner: {
-    name: 'tohn janner', tier: 1, atk: 4, hp: 4, img: 'tohnjanner.png',
+    name: 'tohn janner', tier: 1, atk: 3, hp: 3, img: 'tohnjanner.png',
     text: L => `no ability, just a strong start. <b>level up:</b> an extra +1/+1`,
     on: {
       levelUp(s, u) { s.buff(u, 1, 1); }

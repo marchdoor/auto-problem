@@ -13,7 +13,27 @@ fitAppHeight();
 window.addEventListener('resize', fitAppHeight);
 window.addEventListener('orientationchange', () => setTimeout(fitAppHeight, 150));
 if (window.visualViewport) window.visualViewport.addEventListener('resize', fitAppHeight);
-const UNIT_COST = 3, ITEM_COST = 3, ROLL_COST = 1, START_GOLD = 10, START_LIVES = 5, WIN_TARGET = 10;
+let UNIT_COST = 3, ITEM_COST = 3, ROLL_COST = 1, START_GOLD = 10, START_LIVES = 5, WIN_TARGET = 10;
+// room rules (online): the host can change these in the lobby. solo runs always use the defaults.
+const RULE_DEFS = {
+  lives: { name: 'hearts', def: 5, opts: [1, 2, 3, 4, 5, 6, 8, 10, 15] },
+  gold: { name: 'gold per turn', def: 10, opts: [6, 8, 10, 12, 15, 20, 30] },
+  wins: { name: 'trophies to win', def: 10, opts: [3, 5, 7, 10, 12, 15, 20] },
+  secs: { name: 'seconds per turn', def: 90, opts: [30, 45, 60, 90, 120, 180] },
+  unit: { name: 'character cost', def: 3, opts: [1, 2, 3, 4, 5] },
+  roll: { name: 'roll cost', def: 1, opts: [0, 1, 2, 3] },
+};
+function cleanRules(r) {
+  const o = {}; r = r || {};
+  for (const k in RULE_DEFS) { const v = +r[k]; o[k] = RULE_DEFS[k].opts.includes(v) ? v : RULE_DEFS[k].def; }
+  return o;
+}
+function setRules(r) {
+  r = cleanRules(r);
+  START_LIVES = r.lives; START_GOLD = r.gold; WIN_TARGET = r.wins; UNIT_COST = r.unit; ROLL_COST = r.roll;
+  if (typeof NET_LIVES !== 'undefined') { NET_LIVES = r.lives; TURN_SECONDS = r.secs; }
+  return r;
+}
 
 let S = null;          // run state
 let sel = null;        // {kind:'shop'|'item'|'team', idx}
@@ -71,6 +91,7 @@ function phaseSong(kind) {
 }
 
 function newRun(endless = false) {
+  setRules();
   setEndless(endless);
   S = { runId: Date.now() + '-' + Math.floor(Math.random() * 1e6), turn: 1, gold: START_GOLD, lives: START_LIVES, wins: 0,
         team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [], endless: !!endless, packs: packPrefs(), curses: [] };
