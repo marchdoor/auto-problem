@@ -23,15 +23,22 @@ const RULE_DEFS = {
   unit: { name: 'character cost', def: 3, opts: [1, 2, 3, 4, 5] },
   roll: { name: 'roll cost', def: 1, opts: [0, 1, 2, 3] },
 };
+// special mode (online): best of 3, veteran cards, the team is wiped every round and you get loads of gold.
+// 2 hearts and 2 trophies make it a best of 3: after 1-1 both players are on their last heart, so game 3 is sudden death.
+const SPMODE = { gold: 40, bonus: 4, exp: 2, minTier: 3, units: 5, items: 3 };
+let SPECIAL_ON = false;
 function cleanRules(r) {
   const o = {}; r = r || {};
+  o.special = r.special ? 1 : 0;
   for (const k in RULE_DEFS) { const v = +r[k]; o[k] = RULE_DEFS[k].opts.includes(v) ? v : RULE_DEFS[k].def; }
   return o;
 }
 function setRules(r) {
   r = cleanRules(r);
+  SPECIAL_ON = !!r.special;
   START_LIVES = r.lives; START_GOLD = r.gold; WIN_TARGET = r.wins; UNIT_COST = r.unit; ROLL_COST = r.roll;
-  if (typeof NET_LIVES !== 'undefined') { NET_LIVES = r.lives; TURN_SECONDS = r.secs; }
+  if (SPECIAL_ON) { START_GOLD = SPMODE.gold; START_LIVES = 2; WIN_TARGET = 2; }
+  if (typeof NET_LIVES !== 'undefined') { NET_LIVES = START_LIVES; TURN_SECONDS = r.secs; }
   return r;
 }
 
@@ -105,6 +112,7 @@ function newRun(endless = false) {
 
 function startTurn() {
   S.turn++; S.gold = START_GOLD;
+  if (SPECIAL_ON && S.net) S.team = [null, null, null, null, null];   // special mode: fresh deck every round
   S.team.forEach(u => { if (u) u.next = null; });   // food side effects only last one battle
   rollShop(true);
   S.team.filter(Boolean).forEach(u => shopTrigger(u, 'startTurn'));
@@ -156,6 +164,7 @@ function bossChoice() {
 function shopSizes() {
   const t = S.turn;
   if (S.rebuild) return { units: REBUILD.shop, items: 2 };
+  if (SPECIAL_ON && S.net) return { units: SPMODE.units, items: SPMODE.items };
   return { units: t <= 4 ? 3 : t <= 8 ? 4 : 5, items: t <= 2 ? 1 : 2 };
 }
 // a shop character: normal, or a veteran in the final wave's rebuild shop
@@ -163,6 +172,11 @@ function shopUnit(tier) {
   if (S.rebuild) {
     const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier >= REBUILD.minTier && packOk(UNITS[k]));
     return mkVeteran(pick(pool));
+  }
+  if (SPECIAL_ON && S.net) {   // veteran card: pre-levelled and a bit stronger
+    const pool = Object.keys(UNITS).filter(k => !UNITS[k].token && !UNITS[k].secret && UNITS[k].tier >= SPMODE.minTier && packOk(UNITS[k]));
+    const id = pick(pool);
+    return newUnit(id, { atk: UNITS[id].atk + SPMODE.bonus, hp: UNITS[id].hp + SPMODE.bonus, exp: SPMODE.exp });
   }
   return newUnit(randomUnitId(tier));
 }

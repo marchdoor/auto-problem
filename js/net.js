@@ -368,12 +368,13 @@ const NET = {
       ${msg ? `<p class="cap-style">${msg}</p>` : ''}
       <ul class="lobby-list">${players.map(p => `<li>${p.name}${p.id === this.myId ? ' (you)' : ''}${p.id === NET_PREFIX + this.code ? ' 👑' : ''}</li>`).join('')}</ul>
       <div class="lobby-packs">${Object.entries(PACKS).map(([k, p]) => this.isHost ? `<label class="pack"><input type="checkbox" data-pk="${k}" ${pk[k] ? 'checked' : ''}><span><b>${p.name}</b> <small>${p.text}</small></span></label>` : `<p class="t">${p.name}: <b>${pk[k] ? 'on' : 'off'}</b></p>`).join('')}</div>
-      <div class="lobby-rules">${Object.entries(RULE_DEFS).map(([k, d]) => this.isHost ? `<label>${d.name} <select data-rk="${k}">${d.opts.map(o => `<option ${o === rl[k] ? 'selected' : ''}>${o}</option>`).join('')}</select></label>` : `<span>${d.name}: <b>${rl[k]}</b></span>`).join('')}</div>
+      <div class="lobby-rules">${this.isHost ? `<label class="sp"><input type="checkbox" id="rk-special" ${rl.special ? 'checked' : ''}> <b>special mode</b> <small>best of 3 · veteran cards · fresh deck each round · ${SPMODE.gold} gold · game 3 is sudden death</small></label>` : (rl.special ? '<span class="sp"><b>special mode</b>: best of 3, veteran cards, fresh deck every round, game 3 is sudden death</span>' : '')}${rl.special ? '' : Object.entries(RULE_DEFS).map(([k, d]) => this.isHost ? `<label>${d.name} <select data-rk="${k}">${d.opts.map(o => `<option ${o === rl[k] ? 'selected' : ''}>${o}</option>`).join('')}</select></label>` : `<span>${d.name}: <b>${rl[k]}</b></span>`).join('')}</div>
       <p class="t">${players.length}/${MAX_PLAYERS} players · first to ${WIN_TARGET} trophies wins, or last one standing</p>
       <div style="display:flex;gap:12px">${this.isHost ? `<button class="big" id="net-start" ${players.length < 2 ? 'disabled' : ''}>start game</button>` : ''}<button id="net-leave">leave</button></div>`);
     $('#modal-close').classList.add('hidden');
     if (this.isHost) {
       $('#net-start').onclick = () => this.hostStart();
+      $('#rk-special').onchange = e => { this.rules.special = e.target.checked ? 1 : 0; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); };
       document.querySelectorAll('.lobby-rules select').forEach(i => { i.onchange = () => { this.rules[i.dataset.rk] = +i.value; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });
       document.querySelectorAll('.lobby-packs input').forEach(i => { i.onchange = () => { this.packs[i.dataset.pk] = i.checked; savePackPrefs(this.packs); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });
     }
