@@ -720,3 +720,17 @@ body.endless .wins-max { display: none; }
 .lobby-rules select { background: #000; color: #fff; border: 2px solid #fff; border-radius: 10px; padding: 2px 6px; font: 700 13px Arial; }
 .lobby-rules .sp { flex-basis: 100%; text-align: center; font: 700 13px Arial; }
 .lobby-rules .sp small { display: block; color: var(--muted); font-weight: 600; }
+
+/* chat button: top right, under the hud, so it never covers the roll button */
+#chat-btn { left: auto; bottom: auto; right: 14px; top: 64px; height: 38px; padding: 0 16px; font-size: 14px; }
+#chat { left: auto; bottom: auto; right: 14px; top: 110px; height: min(520px, calc(100vh - 130px)); }
+.chat-name { cursor: pointer; }
+.chat-msg.mine .chat-name { cursor: default; }
+.spec-bar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 61; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 92vw; background: #0d0d0d; border: 2px solid #fff; border-radius: 22px; padding: 8px 12px; box-shadow: 4px 4px 0 #000; font: 700 13px Arial; }
+.spec-bar button { border-radius: 14px; padding: 4px 12px; min-width: 0; font: 700 13px Arial; }
+.spec-bar button.on { border-color: #ffd34d; box-shadow: 0 0 0 1px #ffd34d; }
+.lobby-list li .tag { font: 700 11px Arial; color: var(--muted); margin-left: 6px; }
+.lobby-list li .kick { float: right; padding: 0 8px; min-width: 0; border-radius: 10px; font: 700 12px Arial; }
+.lobby-me { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 6px 0; }
+.lobby-me button { border-radius: 16px; padding: 5px 14px; min-width: 0; font: 700 13px Arial; }
+.lobby-me button.on { border-color: #43e04f; box-shadow: 0 0 0 1px #43e04f; }

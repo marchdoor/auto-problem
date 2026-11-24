@@ -107,11 +107,13 @@ const CHAT = {
     const okSt = (k) => { const r = this.rewardOf(st[k]); return r && r.type === k ? r.id : null; };
     NET.broadcast({ t: 'chat', from, name: p.name, prof: this.cleanProf(p.prof), text, clip, st: { bubble: okSt('bubble'), name: okSt('name'), text: okSt('text') }, ts: now });
   },
+  muted: {},
   receive(m) {
+    if (this.muted[m.from]) return;
     this.msgs.push(m); if (this.msgs.length > 120) this.msgs.shift();
     if (this.open) this.draw(true); else { this.unread++; this.badge(); }
   },
-  clear() { this.msgs = []; this.unread = 0; this.open = false; this.picking = false; this.badge(); if (this.el) this.el.classList.add('hidden'); },
+  clear() { this.muted = {}; this.msgs = []; this.unread = 0; this.open = false; this.picking = false; this.badge(); if (this.el) this.el.classList.add('hidden'); },
   watchClip(key) {
     if (!CUTSCENES[key]) return;
     if (CUT.active) return toast('wait for the cutscene that is playing');
@@ -123,7 +125,7 @@ const CHAT = {
     if (this.el) return;
     const app = document.getElementById('app');
     this.btn = document.createElement('button');
-    this.btn.id = 'chat-btn'; this.btn.className = 'hidden'; this.btn.innerHTML = '<span>chat</span><i id="chat-badge" class="hidden">0</i>';
+    this.btn.id = 'chat-btn'; this.btn.className = 'hidden'; this.btn.innerHTML = '<span>💬 room chat</span><i id="chat-badge" class="hidden">0</i>';
     this.btn.onclick = () => this.toggle();
     this.el = document.createElement('div');
     this.el.id = 'chat'; this.el.className = 'hidden';
@@ -194,7 +196,7 @@ const CHAT = {
     const list = this.el.querySelector('#chat-list');
     const me = typeof NET !== 'undefined' ? NET.myId : null;
     list.innerHTML = this.msgs.length ? '' : '<div class="chat-empty">nobody said anything yet</div>';
-    this.msgs.forEach(m => {
+    this.msgs.filter(m => !this.muted[m.from]).forEach(m => {
       const prof = this.cleanProf(m.prof), st = m.st || {};
       const bub = this.rewardOf(st.bubble), nm = this.rewardOf(st.name), tx = this.rewardOf(st.text);
       const row = document.createElement('div');
@@ -205,6 +207,8 @@ const CHAT = {
       row.innerHTML = `<div class="chat-pfp"><img src="${/^u:/.test(prof.pfp) ? imgSrc(prof.pfp.slice(2)) : 'assets/units/' + PFP[prof.pfp]}" alt=""></div>
         <div class="chat-main"><div class="chat-name ${nm && nm.type === 'name' ? nm.id : ''}">${esc(m.name)}${esc(prof.suffix)}</div>
         <div class="chat-bubble" style="--bc:${bub && bub.type === 'bubble' ? bub.col : '#8a8f98'}">${body}</div></div>`;
+      if (m.from !== me) row.querySelector('.chat-name').onclick = () => { this.muted[m.from] = true; toast(`muted ${m.name}. their messages are hidden until you leave the room`); this.draw(); };
+      row.querySelector('.chat-name').title = m.from === me ? '' : 'click to mute';
       const c = row.querySelector('.chat-clipcard'); if (c) c.onclick = () => this.watchClip(c.dataset.k);
       list.appendChild(row);
     });

@@ -21,7 +21,7 @@ const NET = {
   active: false, isHost: false, peer: null, conn: null, conns: {},
   myId: null, myName: '', code: '', players: {}, order: [],
   turn: 0, deadline: 0, timerInt: null, phase: 'lobby', pendingTurn: null, lastBattle: null,
-  hostTimeout: null,
+  hostTimeout: null, watchTok: 0, watching: false, lastRoom: null,
 
   // ---------- setup ----------
   host(name) {
@@ -38,6 +38,7 @@ const NET = {
   },
   join(name, code) {
     this.reset(); this.myName = name; this.code = code.toUpperCase().trim();
+    this.lastRoom = { code: this.code, name };
     this.peer = new Peer(undefined, peerOptions());
     this.peer.on('open', id => {
       this.myId = id;
@@ -46,7 +47,7 @@ const NET = {
       const t = setTimeout(() => this.fail('could not reach room ' + this.code + '. if the code is right, your two networks cannot connect directly (mobile data, school / work wifi and some routers block it). try another network or a hotspot, or the host can set up a relay server (see js/turn.js)'), 25000);
       conn.on('open', () => { clearTimeout(t); this.active = true; conn.send({ t: 'hello', name, prof: CHAT.profileFor(name) }); });
       conn.on('data', m => this.onMessage(m));
-      conn.on('close', () => { if (this.active) this.fail('the host left. and you cry'); });
+      conn.on('close', () => { if (this.active) this.fail('lost the connection to the host. and you cry', this.phase !== 'lobby'); });
     });
     this.peer.on('error', e => this.fail(e.type === 'peer-unavailable' ? 'room ' + this.code + ' not found' : 'connection error: ' + e.type));
   },
@@ -57,6 +58,7 @@ const NET = {
     Object.assign(this, { active: false, isHost: false, peer: null, conn: null, conns: {}, players: {}, order: [], turn: 0, phase: 'lobby', pendingTurn: null, lastBattle: null });
   },
   leave() {
+    this.lastRoom = null; this.watchTok++; if (this.watching) skipping = true; this.specBar(null);
     this.reset();
     this.sdPanel(null);
     $('#hud-sd').classList.add('hidden');
@@ -65,21 +67,24 @@ const NET = {
     $('#result').classList.add('hidden'); $('#modal').classList.add('hidden');
     toTitle();
   },
-  fail(msg) {
+  fail(msg, canRejoin) {
     const wasActive = this.active;
+    const room = canRejoin && this.lastRoom;
+    this.watchTok++; if (this.watching) skipping = true; this.specBar(null);
     this.reset();
     $('#hud-timer').classList.add('hidden');
     S = null; battleBusy = false; $('#result').classList.add('hidden');
     $('#hud-sd').classList.add('hidden');
     showScreen('title');
-    openModal(`<h2>online</h2><p class="cap-style" style="font-size:24px">${msg}</p><button class="big" id="net-back">back</button>`);
-    $('#net-back').onclick = () => { closeModal(); onlineMenu(); };
+    openModal(`<h2>online</h2><p class="cap-style" style="font-size:24px">${msg}</p>${room ? `<button class="big" id="net-rejoin">rejoin room ${room.code}</button> ` : ''}<button class="big" id="net-back">back</button>`);
+    $('#net-back').onclick = () => { this.lastRoom = null; closeModal(); onlineMenu(); };
+    if (room) $('#net-rejoin').onclick = () => { openModal('<h2>joining…</h2>'); this.join(room.name, room.code); };
     if (!wasActive) return;
   },
 
   // ---------- host side ----------
   addPlayer(id, name, prof) {
-    this.players[id] = { id, prof: CHAT.cleanProf(prof), name: name.slice(0, 16) || 'player', lives: NET_LIVES, wins: 0, alive: true, team: [], ready: false, done: false, connected: true };
+    this.players[id] = { id, prof: CHAT.cleanProf(prof), name: String(name || '').slice(0, 16) || 'player', lives: NET_LIVES, wins: 0, alive: true, team: [], ready: false, done: false, connected: true, spec: false, rdy: false, missed: 0 };
     this.order.push(id);
   },
   hostAccept(conn) {
@@ -88,19 +93,24 @@ const NET = {
       const p = this.players[conn.peer]; delete this.conns[conn.peer];
       if (!p) return;
       p.connected = false;
-      if (this.phase === 'lobby') { delete this.players[conn.peer]; this.order = this.order.filter(x => x !== conn.peer); }
-      else { p.alive = false; p.lives = 0; }
-      this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code, msg: `${p.name} left` });
+      if (this.phase === 'lobby') { delete this.players[conn.peer]; this.order = this.order.filter(x => x !== conn.peer); this.fixSpectators(); }
+      else if (this.phase === 'over') { /* the game is over, nothing to keep */ }
+      else { p.ready = true; p.done = true; }
+      this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code, msg: this.phase === 'lobby' || this.phase === 'over' ? `${p.name} left` : `${p.name} lost connection. they can rejoin with the room code` });
       this.hostCheckProgress();
     });
   },
   hostHandle(from, m, conn) {
     if (m.t === 'hello') {
-      if (this.phase !== 'lobby') { conn && conn.send({ t: 'error', msg: 'that game already started' }); return; }
+      if (this.phase !== 'lobby') { this.hostRejoin(from, m, conn); return; }
       if (this.order.length >= MAX_PLAYERS) { conn && conn.send({ t: 'error', msg: 'room is full (8 players)' }); return; }
       this.conns[from] = conn;
       this.addPlayer(from, m.name, m.prof);
       this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code });
+    } else if (m.t === 'lobbyset') {
+      this.hostLobbySet(from, m);
+    } else if (m.t === 'rematch') {
+      if (from === this.myId) this.hostRematch();
     } else if (m.t === 'ready') {
       const p = this.players[from]; if (!p || this.phase !== 'shop') return;
       p.team = m.team; p.ready = true;
@@ -115,12 +125,63 @@ const NET = {
       this.hostCheckProgress();
     }
   },
+  // lobby: ready-up, spectate only, kick
+  hostLobbySet(from, m) {
+    const p = this.players[from]; if (!p || this.phase !== 'lobby') return;
+    if (m.kick) {
+      if (from !== this.myId || m.kick === this.myId) return;
+      const c = this.conns[m.kick]; if (c) { try { c.send({ t: 'error', msg: 'the host removed you from the room' }); } catch (e) {} setTimeout(() => { try { c.close(); } catch (e) {} }, 300); }
+      delete this.conns[m.kick]; delete this.players[m.kick]; this.order = this.order.filter(x => x !== m.kick); this.fixSpectators();
+    }
+    if (m.rdy != null) p.rdy = !!m.rdy;
+    if (m.spec != null) {
+      if (m.spec) {
+        const others = this.order.filter(id => id !== from && !this.players[id].spec).length;
+        if (this.order.length < 3 || others < 2) return;   // spectate only needs 3+ players in the room, and 2 who play
+      }
+      p.spec = !!m.spec; if (p.spec) p.rdy = false;
+    }
+    this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code });
+  },
+  // fewer than 3 players or fewer than 2 who play: nobody can spectate any more
+  fixSpectators() {
+    const playing = this.order.filter(id => !this.players[id].spec).length;
+    if (this.order.length < 3 || playing < 2) this.order.forEach(id => { this.players[id].spec = false; });
+  },
+  // a dropped player comes back with the same name: they take their old place
+  hostRejoin(from, m, conn) {
+    const name = String(m.name || '').slice(0, 16);
+    const old = this.phase === 'over' ? null : this.order.find(id => !this.players[id].connected && this.players[id].name === name);
+    if (!old) { conn && conn.send({ t: 'error', msg: this.phase === 'over' ? 'that game is over' : 'that game already started' }); return; }
+    const p = this.players[old];
+    delete this.players[old]; this.order[this.order.indexOf(old)] = from;
+    p.id = from; p.connected = true; p.missed = 0; this.players[from] = p; this.conns[from] = conn;
+    const base = { players: this.publicPlayers(), packs: this.packs || packPrefs(), rules: this.rules = cleanRules(this.rules) };
+    if (this.phase === 'shop' && p.alive) {
+      p.ready = false; p.done = false;
+      const left = Math.max(10, Math.round((this.shopEnd - Date.now()) / 1000));
+      conn.send({ t: 'turn', turn: this.turn, seconds: left, songs: this.turnSongs, sudden: this.sd ? { mode: this.sd.mode } : null, restore: { team: p.team || [], wins: p.wins, lives: p.lives }, ...base });
+    } else conn.send({ t: 'wait', restore: { wins: p.wins, lives: p.lives }, ...base });
+    this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code, msg: `${p.name} is back` });
+    this.hostCheckProgress();
+  },
+  // after the game: the host sends everyone back to the lobby with the same rules
+  hostRematch() {
+    if (this.phase !== 'over') return;
+    clearTimeout(this.hostTimeout);
+    this.order = this.order.filter(id => this.players[id].connected);
+    Object.keys(this.players).forEach(id => { if (!this.order.includes(id)) delete this.players[id]; });
+    this.order.forEach(id => { const p = this.players[id]; Object.assign(p, { lives: NET_LIVES, wins: 0, alive: true, team: [], ready: false, done: false, rdy: false, missed: 0 }); });
+    this.fixSpectators();
+    this.phase = 'lobby'; this.turn = 0; this.sd = null;
+    this.broadcast({ t: 'rematch', players: this.publicPlayers(), code: this.code });
+  },
   aliveIds() { return this.order.filter(id => this.players[id].alive); },
-  publicPlayers() { return this.order.map(id => { const p = this.players[id]; return { id, name: p.name, lives: p.lives, wins: p.wins, alive: p.alive, connected: p.connected }; }); },
+  publicPlayers() { return this.order.map(id => { const p = this.players[id]; return { id, name: p.name, lives: p.lives, wins: p.wins, alive: p.alive, connected: p.connected, spec: !!p.spec, rdy: !!p.rdy }; }); },
   hostStart() {
-    if (this.order.length < 2) return toast('need at least 2 players');
+    if (this.order.filter(id => !this.players[id].spec).length < 2) return toast('need at least 2 players who play');
     this.rules = setRules(this.rules);
-    this.order.forEach(id => { this.players[id].lives = NET_LIVES; });
+    this.order.forEach(id => { const p = this.players[id]; p.lives = NET_LIVES; p.wins = 0; p.alive = !p.spec; p.team = []; });
     this.phase = 'starting';
     this.playlist = newPlaylist();
     this.hostNextTurn();
@@ -137,7 +198,12 @@ const NET = {
   hostStartShop() {
     clearTimeout(this.hostTimeout);
     this.phase = 'shop';
-    this.order.forEach(id => { const p = this.players[id]; p.ready = !p.alive; p.done = false; });
+    this.order.forEach(id => {
+      const p = this.players[id];
+      if (p.alive && !p.connected && ++p.missed > 3) { p.alive = false; p.lives = 0; }
+      p.ready = !p.alive || !p.connected; p.done = false;
+    });
+    this.shopEnd = Date.now() + TURN_SECONDS * 1000;
     this.broadcast({ t: 'turn', turn: this.turn, seconds: TURN_SECONDS, players: this.publicPlayers(), songs: this.turnSongs,
                      sudden: this.sd ? { mode: this.sd.mode } : null });
     // anyone who hasn't sent a team 15s after the timer keeps their last team
@@ -214,6 +280,8 @@ const NET = {
     else if (m.t === 'chat') CHAT.receive(m);
     else if (m.t === 'status') { $('#net-wait-count') && ($('#net-wait-count').textContent = `${m.ready}/${m.total} ready`); }
     else if (m.t === 'turn') this.onTurn(m);
+    else if (m.t === 'wait') this.onWait(m);
+    else if (m.t === 'rematch') this.onRematch(m);
     else if (m.t === 'battles') this.onBattles(m);
     else if (m.t === 'end') this.onEnd(m);
     else if (m.t === 'sd_vote') this.onSdVote(m);
@@ -232,10 +300,44 @@ const NET = {
             team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [] };
     }
     if (m.packs) { S.packs = m.packs; setPacks(m.packs); }
+    if (m.restore) this.restoreState(m.restore);
     if (!this.isHost) this.phase = 'shop';
+    this.watchTok++; if (this.watching) skipping = true;   // a spectator's battle stops when the next round starts
     this.pendingTurn = m;
     // wait for the player to close the result screen first
     if ($('#result').classList.contains('hidden')) this.beginTurn();
+  },
+  // a player who came back gets their last team and score back
+  restoreState(r) {
+    if (r.team && r.team.length) {
+      S.team = [null, null, null, null, null];
+      r.team.slice(0, 5).forEach((x, i) => {
+        if (!UNITS[x.id]) return;
+        const u = newUnit(x.id, { atk: x.atk, hp: x.hp, exp: x.exp, item: x.item || null });
+        u.uid = x.uid; u.buffs = x.buffs || []; S.team[i] = u;
+      });
+    }
+    S.wins = r.wins || 0; S.lives = r.lives || S.lives;
+  },
+  onWait(m) {
+    this.lobbyPlayers = m.players; this.phase = 'shop';
+    if (m.packs) { this.packs = m.packs; setPacks(m.packs); }
+    if (!S) S = { net: true, runId: 'net-' + this.myId, turn: 0, gold: START_GOLD, lives: NET_LIVES, wins: 0, team: [null, null, null, null, null], shop: { units: [], items: [] }, nikeKills: 0, history: [], packs: m.packs };
+    if (m.restore) this.restoreState(m.restore);
+    $('#hud-timer').classList.add('hidden');
+    showScreen('battle');
+    openModal(`<div style="text-align:center"><h2>you are back</h2><p class="cap-style" style="font-size:24px">wait a bit, the round in progress has to finish</p>${this.standingsHTML(m.players)}</div>`);
+    $('#modal-close').classList.add('hidden');
+  },
+  onRematch(m) {
+    clearInterval(this.timerInt); this.watchTok++; if (this.watching) skipping = true; this.specBar(null); this.sdPanel(null);
+    Object.assign(this, { phase: 'lobby', turn: 0, pendingTurn: null, lobbyPlayers: m.players, sudden: null });
+    S = null; battleBusy = false; skipping = false;
+    $('#result').classList.add('hidden'); $('#hud-sd').classList.add('hidden'); $('#hud-timer').classList.add('hidden');
+    document.documentElement.style.setProperty('--gray', '1');
+    try { CUT.active && CUT.close(true); } catch (e) {}
+    showScreen('title');
+    this.showLobby('rematch! same rules');
   },
   beginTurn() {
     const m = this.pendingTurn; if (!m) return;
@@ -275,9 +377,10 @@ const NET = {
     $('#modal').classList.add('hidden'); $('#modal-close').classList.remove('hidden');
     this.lobbyPlayers = m.players;
     const bt = m.battles.find(b => b.a === this.myId || b.b === this.myId);
-    if (!bt) { // already out: just follow the standings
+    if (!S) { this.send({ t: 'done' }); return; }   // came back in the middle of a round
+    if (!bt) { // already out, or spectating: watch a live battle
       this.send({ t: 'done' });
-      this.spectate(m.players);
+      this.watchBattles(m);
       return;
     }
     const mineIsA = bt.a === this.myId;
@@ -304,9 +407,48 @@ const NET = {
     applyTentLoss(res.tentLost, mineIsA ? 'A' : 'B');
     this.showResult(result, m.players);
   },
+  // spectators and eliminated players watch the other players' battles. buttons switch between them.
+  specBar(m, idx) {
+    let el = document.getElementById('spec-bar');
+    if (!m) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'spec-bar'; el.className = 'spec-bar'; $('#battle').appendChild(el); }
+    el.innerHTML = '<span>watching:</span>' + m.battles.map((b, i) => `<button data-i="${i}" class="${i === idx ? 'on' : ''}">${esc(b.nameA)} vs ${esc(b.nameB)}</button>`).join('') + '<button id="spec-skip">skip</button><button id="spec-out">leave</button>';
+    el.querySelectorAll('button[data-i]').forEach(b => b.onclick = () => { this.specPick = +b.dataset.i; this.specPref = m.battles[+b.dataset.i].a; skipping = true; });
+    el.querySelector('#spec-skip').onclick = () => { this.specPick = null; skipping = true; };
+    el.querySelector('#spec-out').onclick = () => this.leave();
+  },
+  async watchBattles(m) {
+    const tok = ++this.watchTok;
+    this.watching = true;
+    let idx = Math.max(0, m.battles.findIndex(b => b.a === this.specPref || b.b === this.specPref));
+    while (m.battles.length && tok === this.watchTok) {
+      const bt = m.battles[idx];
+      const res = simulateBattle(netTeam(bt.teamA), netTeam(bt.teamB), bt.seed, { ban: bt.ban });
+      if (!bt.sudden) phaseSong('battle');
+      setBattleBg(bt.seed);
+      showScreen('battle');
+      $('#hud-sd') && $('#hud-sd').classList.add('hidden');
+      this.sdPanel(null);
+      $('#enemy-name').textContent = bt.nameB; $('#caption').textContent = '';
+      $('#b-lives').textContent = S.lives; $('#b-wins').textContent = S.wins; $('#b-turn').textContent = S.turn;
+      this.specBar(m, idx);
+      this.specPick = undefined; skipping = false;
+      await playBattle(res.frames, { result: res.result, seed: bt.seed, sudden: false });
+      if (tok !== this.watchTok) break;
+      if (this.specPick === undefined) break;        // the battle played to the end
+      if (this.specPick === null) break;             // skip
+      idx = this.specPick;                           // switched to another battle
+    }
+    this.watching = false;
+    skipping = false;
+    if (tok !== this.watchTok) return;
+    this.specBar(null);
+    const res = m.battles.map(b => `${esc(b.nameA)} ${b.result === 'win' ? 'beat' : b.result === 'lose' ? 'lost to' : 'drew with'} ${esc(b.nameB)}`);
+    this.spectate(m.players, res);
+  },
   standingsHTML(players) {
     const rows = players.slice().sort((a, b) => b.alive - a.alive || b.wins - a.wins || b.lives - a.lives).map(p =>
-      `<tr class="${p.id === this.myId ? 'me' : ''} ${p.alive ? '' : 'out'}"><td>${p.name}${p.id === this.myId ? ' (you)' : ''}${p.connected === false ? ' · left' : ''}</td><td>🏆 ${p.wins}</td><td>${p.alive ? '❤️ ' + p.lives : 'is died'}</td></tr>`).join('');
+      `<tr class="${p.id === this.myId ? 'me' : ''} ${p.alive || p.spec ? '' : 'out'}"><td>${p.name}${p.id === this.myId ? ' (you)' : ''}${p.connected === false ? ' · left' : ''}</td><td>🏆 ${p.wins}</td><td>${p.spec ? '👁 spectating' : p.alive ? '❤️ ' + p.lives : 'is died'}</td></tr>`).join('');
     return `<table class="standings">${rows}</table>`;
   },
   showResult(result, players) {
@@ -330,16 +472,17 @@ const NET = {
       if (this.pendingTurn) this.beginTurn();
     };
   },
-  spectate(players) {
+  spectate(players, results) {
     showScreen('battle');
-    $('#b-mine').innerHTML = ''; $('#b-theirs').innerHTML = '';
-    $('#caption').textContent = 'you are out. watching the standings';
-    openModal(`<div style="text-align:center"><h2>you are out</h2><p class="cap-style" style="font-size:22px">wait a bit for the end of the line</p>${this.standingsHTML(players)}<button id="net-leave2">leave game</button></div>`);
+    const meP = this.me(players), spec = meP && meP.spec;
+    if (!results) { $('#b-mine').innerHTML = ''; $('#b-theirs').innerHTML = ''; }
+    $('#caption').textContent = spec ? 'spectating' : 'you are out. watching';
+    openModal(`<div style="text-align:center"><h2>${spec ? 'spectating' : 'you are out'}</h2>${results ? `<p class="t">${results.join('<br>')}</p>` : ''}<p class="cap-style" style="font-size:22px">wait a bit, the next round is coming. you will watch a live battle</p>${this.standingsHTML(players)}<button id="net-leave2">leave game</button></div>`);
     $('#modal-close').classList.add('hidden');
     $('#net-leave2').onclick = () => this.leave();
   },
   onEnd(m) {
-    clearInterval(this.timerInt);
+    clearInterval(this.timerInt); this.watchTok++; if (this.watching) skipping = true; this.specBar(null);
     const win = m.winner === this.myId;
     ACH.unlock('firstfriend'); if (win) ACH.unlock('beatfriend');
     const w = m.players.find(p => p.id === m.winner);
@@ -348,9 +491,11 @@ const NET = {
       if (win) document.documentElement.style.setProperty('--gray', '0');
       openModal(`<div style="text-align:center"><h2 style="font-size:64px">${win ? 'end of the line' : 'and you cry'}</h2>
         <p class="cap-style" style="font-size:24px">${w ? w.name + ' ends the line' : 'nobody survives the darius nuke aftermath'}</p>
-        ${this.standingsHTML(m.players)}<button class="big" id="net-done">back to title</button></div>`);
+        ${this.standingsHTML(m.players)}<div style="display:flex;gap:12px;justify-content:center">${this.isHost ? '<button class="big" id="net-rematch">rematch</button>' : ''}<button class="big" id="net-done">back to title</button></div>
+        ${this.isHost ? '<p class="t">rematch: everyone goes back to the lobby with the same rules</p>' : '<p class="t">if the host starts a rematch, you will go back to the lobby</p>'}</div>`);
       Audio2.play(win ? 'win' : 'lose');
       $('#net-done').onclick = () => this.leave();
+      if (this.isHost) $('#net-rematch').onclick = () => this.send({ t: 'rematch' });
     };
     // let the player read their last battle result first
     if (!$('#result').classList.contains('hidden')) { const b = $('#btn-result'); const old = b.onclick; b.onclick = () => { old && old(); show(); }; }
@@ -363,14 +508,19 @@ const NET = {
     if (this.isHost && !this.packs) this.packs = Object.assign({}, packPrefs());
     const pk = this.packs || {};
     const rl = this.rules = cleanRules(this.rules);
+    const meL = players.find(p => p.id === this.myId), playing = players.filter(p => !p.spec).length;
+    const canSpec = players.length >= 3 && playing > 2;
+    const readyN = players.filter(p => p.rdy || p.id === NET_PREFIX + this.code).length;
     openModal(`<h2>room <span class="room-code">${this.code}</span></h2>
       <p>${this.isHost ? 'send this code to your friends. they press <b>play online</b>, then <b>join</b>.' : 'connected. waiting for the host to start.'}</p>
       ${msg ? `<p class="cap-style">${msg}</p>` : ''}
-      <ul class="lobby-list">${players.map(p => `<li>${p.name}${p.id === this.myId ? ' (you)' : ''}${p.id === NET_PREFIX + this.code ? ' 👑' : ''}</li>`).join('')}</ul>
+      <ul class="lobby-list">${players.map(p => `<li>${esc(p.name)}${p.id === this.myId ? ' (you)' : ''}${p.id === NET_PREFIX + this.code ? ' 👑' : ''}${p.spec ? '<span class="tag">👁 spectating</span>' : p.rdy ? '<span class="tag">✅ ready</span>' : ''}${this.isHost && p.id !== this.myId ? `<button class="kick" data-id="${esc(p.id)}" title="remove from the room">✕</button>` : ''}</li>`).join('')}</ul>
+      <div class="lobby-me">${this.isHost ? '' : `<button id="lb-rdy" class="${meL && meL.rdy ? 'on' : ''}" ${meL && meL.spec ? 'disabled' : ''}>${meL && meL.rdy ? '✅ ready' : 'ready up'}</button>`}<button id="lb-spec" class="${meL && meL.spec ? 'on' : ''}" ${canSpec || (meL && meL.spec) ? '' : 'disabled'} title="needs 3 or more players in the room">${meL && meL.spec ? '👁 spectating (tap to play)' : '👁 spectate only'}</button></div>
+      ${players.length < 3 ? '<p class="t">spectate only unlocks when there are 3 or more players</p>' : ''}
       <div class="lobby-packs">${Object.entries(PACKS).map(([k, p]) => this.isHost ? `<label class="pack"><input type="checkbox" data-pk="${k}" ${pk[k] ? 'checked' : ''}><span><b>${p.name}</b> <small>${p.text}</small></span></label>` : `<p class="t">${p.name}: <b>${pk[k] ? 'on' : 'off'}</b></p>`).join('')}</div>
       <div class="lobby-rules">${this.isHost ? `<label class="sp"><input type="checkbox" id="rk-special" ${rl.special ? 'checked' : ''}> <b>special mode</b> <small>best of 3 · veteran cards · fresh deck each round · ${SPMODE.gold} gold · game 3 is sudden death</small></label>` : (rl.special ? '<span class="sp"><b>special mode</b>: best of 3, veteran cards, fresh deck every round, game 3 is sudden death</span>' : '')}${rl.special ? '' : Object.entries(RULE_DEFS).map(([k, d]) => this.isHost ? `<label>${d.name} <select data-rk="${k}">${d.opts.map(o => `<option ${o === rl[k] ? 'selected' : ''}>${o}</option>`).join('')}</select></label>` : `<span>${d.name}: <b>${rl[k]}</b></span>`).join('')}</div>
-      <p class="t">${players.length}/${MAX_PLAYERS} players · first to ${WIN_TARGET} trophies wins, or last one standing</p>
-      <div style="display:flex;gap:12px">${this.isHost ? `<button class="big" id="net-start" ${players.length < 2 ? 'disabled' : ''}>start game</button>` : ''}<button id="net-leave">leave</button></div>`);
+      <p class="t">${players.length}/${MAX_PLAYERS} players · ${readyN}/${players.length} ready · first to ${WIN_TARGET} trophies wins, or last one standing</p>
+      <div style="display:flex;gap:12px">${this.isHost ? `<button class="big" id="net-start" ${playing < 2 ? 'disabled' : ''}>start game</button>` : ''}<button id="net-leave">leave</button></div>`);
     $('#modal-close').classList.add('hidden');
     if (this.isHost) {
       $('#net-start').onclick = () => this.hostStart();
@@ -378,6 +528,10 @@ const NET = {
       document.querySelectorAll('.lobby-rules select').forEach(i => { i.onchange = () => { this.rules[i.dataset.rk] = +i.value; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });
       document.querySelectorAll('.lobby-packs input').forEach(i => { i.onchange = () => { this.packs[i.dataset.pk] = i.checked; savePackPrefs(this.packs); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });
     }
+    const set = o => this.send({ t: 'lobbyset', ...o });
+    if ($('#lb-rdy')) $('#lb-rdy').onclick = () => set({ rdy: !(meL && meL.rdy) });
+    $('#lb-spec').onclick = () => set({ spec: !(meL && meL.spec) });
+    document.querySelectorAll('.lobby-list .kick').forEach(b => b.onclick = () => set({ kick: b.dataset.id }));
     $('#net-leave').onclick = () => this.leave();
   },
 };
