@@ -109,10 +109,10 @@ const ACH_LIST = [
     desc: 'john tanner is going to die to a nike inc unit. it plays at the start of the battle.',
     hint: 'the tanner has a bad feeling.' },
   { id: 'cut_funnyneg', cat: 'cutscenes', tier: 'red', name: 'no more negev (funnyheimer)', img: 'units/funny.png', secret: true, video: 'funnynegev',
-    desc: 'dr. funnyheimer dies with a negev on the field. it is deleted and banned for the run.',
+    desc: 'dr. funnyheimer dies with a negev on the field. it is deleted and banned for the run. the video plays over the whole battle with no song.',
     hint: 'a sacrifice that costs a weapon.' },
   { id: 'cut_venomneg', cat: 'cutscenes', tier: 'red', name: 'no more negev (venom)', img: 'units/venom.png', secret: true, video: 'venomnegev',
-    desc: 'barbie venom dies with a negev on the field. it is deleted and banned for the run.',
+    desc: 'barbie venom dies with a negev on the field. it is deleted and banned for the run. the video plays over the whole battle, over the music.',
     hint: 'venom cries for the negev.' },
 
   // ---- runs ----

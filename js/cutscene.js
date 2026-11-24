@@ -33,11 +33,14 @@ const PENDING_CUTS = {
   nfsg44: ['nfsmafiakillsgiuseppe44.mp4', 'cut_nfsg44', 'nfs mafia vs giuseppe 44'],
   wotocall: ['vodafoneceocallused.mp4', 'cut_wotocall', 'the vodafone call'],
   johnsoon: ['johndiessoon.mp4', 'cut_johnsoon', 'john dies soon'],
-  funnynegev: ['funnyheimernegevban.mp4', 'cut_funnyneg', 'funnyheimer deletes the negev'],
-  venomnegev: ['venomnegevban.mp4', 'cut_venomneg', 'venom deletes the negev'],
+  funnynegev: ['funnyheimerdestroysnegev.mp4', 'cut_funnyneg', 'funnyheimer deletes the negev'],
+  venomnegev: ['venomdestroysnegev.mp4', 'cut_venomneg', 'venom deletes the negev'],
 };
 Object.entries(PENDING_CUTS).forEach(([k, [f, ach, title]]) => {
   const c = CUTSCENES[k] = { src: 'assets/cutscenes/' + f, dur: 6, ach, title, pending: true, ok: false };
+  // these two run over the whole battle: funnyheimer's has no song (death sounds stay, quieter), venom's keeps the battle music and sounds, quieter
+  if (k === 'funnynegev') { c.noMusic = true; c.duck = 0.3; }
+  if (k === 'venomnegev') { c.duck = 0.35; }
   try {
     const v = document.createElement('video'); v.preload = 'metadata'; v.muted = true;
     v.addEventListener('loadedmetadata', () => { if (v.duration && isFinite(v.duration)) { c.dur = v.duration; c.ok = true; } });
@@ -176,10 +179,11 @@ const CUT = {
       add({ k: Math.max(plant, d - 14), d, key: 'rebookboom' });
     }));
 
-    // vodafone call goes off with the vodafone ceo on the field / funnyheimer or venom delete the negev: played right after it happens
+    // vodafone call goes off with the vodafone ceo on the field: played right after it happens
+    // funnyheimer / venom delete the negev: the video plays over the whole battle, start to end
     frames.forEach((f, i) => f.fx.forEach(x => {
       if (x.type === 'vcallceo') add({ k: i, d: i, key: 'wotocall', after: true, pri: 4 });
-      if (x.type === 'negevban') add({ k: i, d: i, key: x.who === 'funny' ? 'funnynegev' : 'venomnegev', after: true, pri: 3 });
+      if (x.type === 'negevban') add({ k: 0, d: frames.length - 1, key: x.who === 'funny' ? 'funnynegev' : 'venomnegev', pri: 30 });
     }));
     // the 5+ kills video replaces the 3+ one for the same unit
     out.forEach((o, i) => { if (o.key === 'noyes3' && out.some(p => p.key === 'noyes5' && p.uid === o.uid)) out.splice(i, 1); });
@@ -206,7 +210,8 @@ const CUT = {
     v.volume = Math.min(1, Audio2.volume / 0.6);
     v.muted = Audio2.muted;
     this.el = el; this.v = v; this.active = true; this.key = key; this.seen = false; this.noAch = !!noAch;
-    Audio2.setDuck(DUCK_LEVEL, 220);
+    Audio2.setDuck(c.duck || DUCK_LEVEL, 220);
+    if (c.noMusic) Audio2.stopMusic();
     const p = v.play(); if (p && p.catch) p.catch(() => { v.muted = true; v.play().catch(() => {}); });
     v.addEventListener('playing', () => { this.seen = true; }, { once: true });
     if (big) { el.classList.add('interactive'); el.querySelector('.pip-x').onclick = () => this.close(); v.addEventListener('ended', () => this.close(), { once: true }); }
