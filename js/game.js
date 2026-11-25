@@ -29,8 +29,9 @@ const SPMODE = { gold: 40, bonus: 4, exp: 2, minTier: 3, units: 5, items: 3 };
 let SPECIAL_ON = false;
 function cleanRules(r) {
   const o = {}; r = r || {};
-  o.coop = r.coop ? 1 : 0;
-  o.special = r.special && !o.coop ? 1 : 0;
+  o.predict = r.predict ? 1 : 0;
+  o.coop = r.coop && !o.predict ? 1 : 0;
+  o.special = r.special && !o.coop && !o.predict ? 1 : 0;
   for (const k in RULE_DEFS) { const v = +r[k]; o[k] = RULE_DEFS[k].opts.includes(v) ? v : RULE_DEFS[k].def; }
   return o;
 }
@@ -39,6 +40,7 @@ function setRules(r) {
   SPECIAL_ON = !!r.special;
   START_LIVES = r.lives; START_GOLD = r.gold; WIN_TARGET = r.wins; UNIT_COST = r.unit; ROLL_COST = r.roll;
   if (SPECIAL_ON) { START_GOLD = SPMODE.gold; START_LIVES = 2; WIN_TARGET = 2; }
+  if (r.predict) START_LIVES = 10;   // foi predict
   if (typeof NET_LIVES !== 'undefined') { NET_LIVES = START_LIVES; TURN_SECONDS = r.secs; }
   return r;
 }

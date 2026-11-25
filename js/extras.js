@@ -96,7 +96,7 @@ const STATS = {
     this.save(d);
   },
   run(win, wins) { if (typeof S !== 'undefined' && S && S.custom) return; const d = this.load(); d.runs++; if (win) d.runWins++; d.bestWins = Math.max(d.bestWins, wins || 0); this.save(d); },
-  online(win, coop) { const d = this.load(); d.online++; if (win) { d.onlineWin++; if (coop) d.coopWin++; } this.save(d); },
+  online(win, coop) { if (typeof S !== 'undefined' && S && S.predict) return; const d = this.load(); d.online++; if (win) { d.onlineWin++; if (coop) d.coopWin++; } this.save(d); },
   open() {
     const d = this.load(), n = d.win + d.lose + d.draw;
     const top = Object.entries(d.units).filter(([k]) => UNITS[k]).sort((a, b) => b[1] - a[1]).slice(0, 5);

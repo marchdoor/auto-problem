@@ -117,6 +117,8 @@ const NET = {
       p.team = m.team; p.ready = true;
       this.broadcast({ t: 'status', ready: this.aliveIds().filter(id => this.players[id].ready).length, total: this.aliveIds().length });
       this.hostCheckProgress();
+    } else if (m.t === 'ppick') {
+      this.hostPredictPick(from, m);
     } else if ((m.t === 'sd_vote' || m.t === 'sd_pick') && this.sd) {
       this.hostHandleSd(from, m);
     } else if (m.t === 'chat') {
@@ -158,7 +160,10 @@ const NET = {
     delete this.players[old]; this.order[this.order.indexOf(old)] = from;
     p.id = from; p.connected = true; p.missed = 0; this.players[from] = p; this.conns[from] = conn;
     const base = { players: this.publicPlayers(), packs: this.packs || packPrefs(), rules: this.rules = cleanRules(this.rules) };
-    if (this.phase === 'shop' && p.alive) {
+    if (this.phase === 'predict' && this.pm) {
+      const left = Math.max(3, Math.round(PRED.SECONDS - (Date.now() - this.pm.start) / 1000));
+      conn.send({ t: 'pmatch', turn: this.turn, match: this.pm.m, seconds: left, songs: this.songs2, restore: { wins: p.wins, lives: p.lives }, ...base, players: this.publicPlayers() });
+    } else if (this.phase === 'shop' && p.alive) {
       p.ready = false; p.done = false;
       const left = Math.max(10, Math.round((this.shopEnd - Date.now()) / 1000));
       conn.send({ t: 'turn', turn: this.turn, seconds: left, songs: this.turnSongs, sudden: this.sd ? { mode: this.sd.mode } : null, coop: this.coop ? this.coopInfo() : null, restore: { team: p.team || [], wins: p.wins, lives: p.lives }, ...base });
@@ -184,6 +189,7 @@ const NET = {
     if (playing < 2) return toast('need at least 2 players who play');
     this.rules = setRules(this.rules);
     this.coop = !!this.rules.coop;
+    this.predict = !!this.rules.predict;
     if (this.coop && playing !== 2) return toast('co-op is for exactly 2 players. the others can spectate');
     this.order.forEach(id => { const p = this.players[id]; p.lives = NET_LIVES; p.wins = 0; p.alive = !p.spec; p.team = []; });
     this.phase = 'starting';
@@ -193,6 +199,7 @@ const NET = {
   hostNextTurn() {
     clearTimeout(this.hostTimeout);
     this.turn++;
+    if (this.predict) return this.hostStartPredict();
     const alive = this.aliveIds();
     const sudden = !this.coop && alive.length === 2 && alive.every(id => this.players[id].lives === 1);
     this.turnSongs = sudden ? { shop: SD_SONG, battle: SD_SONG } : { shop: nextSong(this.playlist), battle: nextSong(this.playlist) };
@@ -218,6 +225,7 @@ const NET = {
   },
   hostCheckProgress() {
     if (!this.isHost) return;
+    if (this.phase === 'predict') this.hostCheckPredict();
     if (this.phase === 'shop' && this.aliveIds().every(id => this.players[id].ready)) {
       if (this.sd && !this.sd.resolved) this.hostStartVote();
       else this.hostRunBattles();
@@ -282,15 +290,16 @@ const NET = {
   hostAfterBattles() {
     clearTimeout(this.hostTimeout);
     const alive = this.aliveIds();
-    const champ = this.order.find(id => this.players[id].wins >= WIN_TARGET);
-    if (alive.length <= 1 || champ) {
+    const champ = this.predict ? null : this.order.find(id => this.players[id].wins >= WIN_TARGET);
+    const roundsUp = this.predict && this.turn >= PRED.MAX_ROUNDS;   // foi predict: after the last round the most lives wins
+    if (alive.length <= 1 || champ || roundsUp) {
       this.phase = 'over';
-      const winner = champ || alive[0] || null;
+      const winner = champ || (roundsUp ? alive.slice().sort((a, b) => this.players[b].lives - this.players[a].lives)[0] : alive[0]) || null;
       this.broadcast({ t: 'end', winner, players: this.publicPlayers(), coop: !!this.coop, winners: this.coop && champ ? this.coopIds() : [] });
     } else this.hostNextTurn();
   },
   broadcast(m) {
-    if (this.isHost && (m.t === 'lobby' || m.t === 'turn')) { m.packs = this.packs || packPrefs(); m.rules = this.rules = cleanRules(this.rules); }
+    if (this.isHost && (m.t === 'lobby' || m.t === 'turn' || m.t === 'pmatch')) { m.packs = this.packs || packPrefs(); m.rules = this.rules = cleanRules(this.rules); }
     Object.values(this.conns).forEach(c => { try { c.send(m); } catch (e) {} });
     this.onMessage(m); // host is a player too
   },
@@ -310,6 +319,8 @@ const NET = {
     else if (m.t === 'turn') this.onTurn(m);
     else if (m.t === 'wait') this.onWait(m);
     else if (m.t === 'rematch') this.onRematch(m);
+    else if (m.t === 'pmatch') this.onPmatch(m);
+    else if (m.t === 'presult') this.onPresult(m);
     else if (m.t === 'battles') this.onBattles(m);
     else if (m.t === 'end') this.onEnd(m);
     else if (m.t === 'sd_vote') this.onSdVote(m);
@@ -360,7 +371,7 @@ const NET = {
   onRematch(m) {
     clearInterval(this.timerInt); this.watchTok++; if (this.watching) skipping = true; this.specBar(null); this.sdPanel(null);
     Object.assign(this, { phase: 'lobby', turn: 0, pendingTurn: null, lobbyPlayers: m.players, sudden: null });
-    S = null; battleBusy = false; skipping = false;
+    PRED.cleanup(); S = null; battleBusy = false; skipping = false;
     $('#result').classList.add('hidden'); $('#hud-sd').classList.add('hidden'); $('#hud-timer').classList.add('hidden');
     document.documentElement.style.setProperty('--gray', '1');
     try { CUT.active && CUT.close(true); } catch (e) {}
@@ -560,13 +571,14 @@ const NET = {
       <div class="lobby-me">${this.isHost ? '' : `<button id="lb-rdy" class="${meL && meL.rdy ? 'on' : ''}" ${meL && meL.spec ? 'disabled' : ''}>${meL && meL.rdy ? '✅ ready' : 'ready up'}</button>`}<button id="lb-spec" class="${meL && meL.spec ? 'on' : ''}" ${canSpec || (meL && meL.spec) ? '' : 'disabled'} title="needs 3 or more players in the room">${meL && meL.spec ? '👁 spectating (tap to play)' : '👁 spectate only'}</button></div>
       ${players.length < 3 ? '<p class="t">spectate only unlocks when there are 3 or more players</p>' : ''}${rl.coop && playing !== 2 ? '<p class="t">co-op needs exactly 2 players who play (others can spectate)</p>' : ''}
       <div class="lobby-packs">${Object.entries(PACKS).map(([k, p]) => this.isHost ? `<label class="pack"><input type="checkbox" data-pk="${k}" ${pk[k] ? 'checked' : ''}><span><b>${p.name}</b> <small>${p.text}</small></span></label>` : `<p class="t">${p.name}: <b>${pk[k] ? 'on' : 'off'}</b></p>`).join('')}</div>
-      <div class="lobby-rules">${this.isHost ? `<label class="sp"><input type="checkbox" id="rk-coop" ${rl.coop ? 'checked' : ''}> <b>co-op vs the bots</b> <small>2 players on the same side · they share the gold (${START_GOLD} split in half, the extra coin swaps each round) · shared hearts and trophies · you fight a bot team</small></label>` : (rl.coop ? '<span class="sp"><b>co-op vs the bots</b>: you and your partner share the gold, hearts and trophies</span>' : '')}${rl.coop ? '' : this.isHost ? `<label class="sp"><input type="checkbox" id="rk-special" ${rl.special ? 'checked' : ''}> <b>special mode</b> <small>best of 3 · veteran cards · fresh deck each round · ${SPMODE.gold} gold · game 3 is sudden death</small></label>` : (rl.special ? '<span class="sp"><b>special mode</b>: best of 3, veteran cards, fresh deck every round, game 3 is sudden death</span>' : '')}${rl.special ? '' : Object.entries(RULE_DEFS).map(([k, d]) => this.isHost ? `<label>${d.name} <select data-rk="${k}">${d.opts.map(o => `<option ${o === rl[k] ? 'selected' : ''}>${o}</option>`).join('')}</select></label>` : `<span>${d.name}: <b>${rl[k]}</b></span>`).join('')}</div>
-      <p class="t">${players.length}/${MAX_PLAYERS} players · ${readyN}/${players.length} ready · first to ${WIN_TARGET} trophies wins, or last one standing</p>
+      <div class="lobby-rules">${this.isHost ? `<label class="sp"><input type="checkbox" id="rk-predict" ${rl.predict ? 'checked' : ''}> <b>foi predict</b> <small>10 lives · two bot teams are built at random and everybody calls the winner in ${PRED.SECONDS} seconds · double down for ±2 · last one standing, or most lives after ${PRED.MAX_ROUNDS} rounds</small></label>` : (rl.predict ? `<span class="sp"><b>foi predict</b>: call the winner of two bot teams, 10 lives, double down for ±2</span>` : '')}${rl.predict ? '' : `${this.isHost ? `<label class="sp"><input type="checkbox" id="rk-coop" ${rl.coop ? 'checked' : ''}> <b>co-op vs the bots</b> <small>2 players on the same side · they share the gold (${START_GOLD} split in half, the extra coin swaps each round) · shared hearts and trophies · you fight a bot team</small></label>` : (rl.coop ? '<span class="sp"><b>co-op vs the bots</b>: you and your partner share the gold, hearts and trophies</span>' : '')}${rl.coop ? '' : this.isHost ? `<label class="sp"><input type="checkbox" id="rk-special" ${rl.special ? 'checked' : ''}> <b>special mode</b> <small>best of 3 · veteran cards · fresh deck each round · ${SPMODE.gold} gold · game 3 is sudden death</small></label>` : (rl.special ? '<span class="sp"><b>special mode</b>: best of 3, veteran cards, fresh deck every round, game 3 is sudden death</span>' : '')}${rl.special ? '' : Object.entries(RULE_DEFS).map(([k, d]) => this.isHost ? `<label>${d.name} <select data-rk="${k}">${d.opts.map(o => `<option ${o === rl[k] ? 'selected' : ''}>${o}</option>`).join('')}</select></label>` : `<span>${d.name}: <b>${rl[k]}</b></span>`).join('')}`}</div>
+      <p class="t">${players.length}/${MAX_PLAYERS} players · ${readyN}/${players.length} ready · ${rl.predict ? `10 lives · last one standing, or most lives after ${PRED.MAX_ROUNDS} rounds` : `first to ${WIN_TARGET} trophies wins, or last one standing`}</p>
       <div style="display:flex;gap:12px">${this.isHost ? `<button class="big" id="net-start" ${playing < 2 || (rl.coop && playing !== 2) ? 'disabled' : ''}>start game</button>` : ''}<button id="net-leave">leave</button></div>`);
     $('#modal-close').classList.add('hidden');
     if (this.isHost) {
       $('#net-start').onclick = () => this.hostStart();
-      $('#rk-coop').onchange = e => { this.rules.coop = e.target.checked ? 1 : 0; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); };
+      if ($('#rk-predict')) $('#rk-predict').onchange = e => { this.rules.predict = e.target.checked ? 1 : 0; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); };
+      if ($('#rk-coop')) $('#rk-coop').onchange = e => { this.rules.coop = e.target.checked ? 1 : 0; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); };
       if ($('#rk-special')) $('#rk-special').onchange = e => { this.rules.special = e.target.checked ? 1 : 0; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); };
       document.querySelectorAll('.lobby-rules select').forEach(i => { i.onchange = () => { this.rules[i.dataset.rk] = +i.value; this.rules = setRules(this.rules); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });
       document.querySelectorAll('.lobby-packs input').forEach(i => { i.onchange = () => { this.packs[i.dataset.pk] = i.checked; savePackPrefs(this.packs); this.broadcast({ t: 'lobby', players: this.publicPlayers(), code: this.code }); }; });

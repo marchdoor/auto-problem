@@ -743,3 +743,22 @@ body.endless .wins-max { display: none; }
 .stat-units img { width: 42px; height: 42px; object-fit: cover; border-radius: 10px; }
 .stat-units small { display: block; color: var(--muted); font-weight: 600; }
 #hud-sd.coopb { background: #12331b; border-color: #43e04f; color: #c6ffd0; }
+
+/* ---- foi predict ---- */
+.pred-panel { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(820px, 96%); z-index: 7; background: rgba(0,0,0,.82); border: 2px solid #fff; border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.pred-panel.hidden { display: none; }
+.pred-top { display: flex; align-items: center; gap: 12px; width: 100%; }
+.pred-top b { font: 900 30px 'Arial Black', Arial, sans-serif; min-width: 38px; text-align: right; }
+.pred-bar { flex: 1; height: 12px; border: 2px solid #fff; border-radius: 8px; overflow: hidden; background: #111; }
+.pred-bar i { display: block; height: 100%; width: 100%; background: var(--gold, #ffd54a); }
+.pred-panel.urgent .pred-bar i { background: #ff5252; }
+.pred-panel.urgent .pred-top b { color: #ff5252; }
+.pred-btns { display: flex; gap: 12px; width: 100%; }
+.pred-btns button { flex: 1; font-size: 20px; padding: 12px 8px; }
+.pred-btns button.chosen { outline: 4px solid var(--gold, #ffd54a); }
+.pred-btns button:disabled:not(.chosen) { opacity: .45; }
+.pred-dd { font: 700 16px Arial; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.pred-dd small { color: var(--muted, #aaa); }
+.pred-info { margin: 0; font: 13px Arial; color: var(--muted, #aaa); text-align: center; }
+.pred-leave { position: absolute; top: -34px; right: 0; font-size: 13px; padding: 4px 10px; }
+@media (max-width: 760px) { .pred-panel { position: sticky; transform: none; left: auto; bottom: 8px; margin: 8px auto 0; } .pred-btns button { font-size: 15px; } }
