@@ -11,13 +11,13 @@ const ACH_LIST = [
   // ---- sounds (they unlock the first time you hear them) ----
   { id: 'comeback', cat: 'sounds', tier: 'silver', name: 'comeback', img: 'units/barbara.png', secret: true,
     desc: 'a battle turns around: the winning team was down by 2 or more cards. a special death sound plays on the next card that falls.',
-    hint: 'turn a lost battle around.', sound: SPX + 'deathsfxCOMEBACK.mp3' },
+    hint: 'turn a lost battle around.', sound: SPX + 'deathsfxCOMEBACK.mp3', alts: [2, 3, 4, 5].map(n => SPX + 'deathsfxCOMEBACK' + n + '.mp3') },
   { id: 'landslide', cat: 'sounds', tier: 'silver', name: 'landslide', img: 'units/troop.png', secret: true,
     desc: 'a battle ends with the winner still holding 3 or more cards. the last death plays this sound.',
-    hint: 'end a battle with a huge lead.', sound: SPX + 'deathsfxlastdeathbylandslide.mp3' },
+    hint: 'end a battle with a huge lead.', sound: SPX + 'deathsfxlastdeathbylandslide.mp3', alts: [2, 3].map(n => SPX + 'deathsfxlastdeathbylandslide' + n + '.mp3') },
   { id: 'rare', cat: 'sounds', tier: 'red', name: 'rare last words', img: 'units/pennius.png', secret: true,
     desc: 'the last death of a battle has a 15% chance to play this one instead of staying quiet.',
-    hint: 'a rare sound hides behind the last death of a battle.', sound: SPX + 'deathsfxlastdeathrarechance.mp3' },
+    hint: 'a rare sound hides behind the last death of a battle.', sound: SPX + 'deathsfxlastdeathrarechance.mp3', alts: [SPX + 'deathsfxlastdeathrarechance2.mp3'] },
   { id: 'noproblem', cat: 'sounds', tier: 'red', name: 'no problem x2', img: 'units/noproblem.png', secret: true,
     desc: 'no problem gets his 2nd kill in one battle. the sound plays alone, and only once.',
     hint: 'let no problem fight. he has a sound for his 2nd kill.', sound: SPX + 'deathsfxnoproblem2killsplus.mp3' },
@@ -189,7 +189,7 @@ const ACH = {
 
   // ---- hooks the game calls ----
   heard(path) { if (this.blocked()) return; // a death sound or a song started playing
-    const a = ACH_LIST.find(x => x.sound === path);
+    const a = ACH_LIST.find(x => x.sound === path || (x.alts && x.alts.includes(path)));
     if (a) this.unlock(a.id);
   },
   theme(path) { if (this.blocked()) return; // a win / lose song started

@@ -641,9 +641,9 @@ function floatText(uid, text, cls) {
 // Works out which death sounds play on which frame. The battle is already
 // simulated, so comebacks and landslides are known before they happen.
 const SPECIAL = {
-  comeback: 'assets/sfx/special/deathsfxCOMEBACK.mp3',
-  landslide: 'assets/sfx/special/deathsfxlastdeathbylandslide.mp3',
-  rare: 'assets/sfx/special/deathsfxlastdeathrarechance.mp3',
+  comeback: ['deathsfxCOMEBACK', 'deathsfxCOMEBACK2', 'deathsfxCOMEBACK3', 'deathsfxCOMEBACK4', 'deathsfxCOMEBACK5'].map(n => 'assets/sfx/special/' + n + '.mp3'),
+  landslide: ['deathsfxlastdeathbylandslide', 'deathsfxlastdeathbylandslide2', 'deathsfxlastdeathbylandslide3'].map(n => 'assets/sfx/special/' + n + '.mp3'),
+  rare: ['deathsfxlastdeathrarechance', 'deathsfxlastdeathrarechance2'].map(n => 'assets/sfx/special/' + n + '.mp3'),
   noproblem: 'assets/sfx/special/deathsfxnoproblem2killsplus.mp3',
   suddenLast: 'assets/sfx/special/suddendeathlastdeathsfx.mp3',
 };
@@ -655,6 +655,7 @@ function planDeathSounds(frames, opts) {
   if (!deaths.length) return plan;
   const last = deaths[deaths.length - 1];
   const rng = mulberry32((opts.seed || 1) ^ 0x5eed);
+  const pick = a => a[Math.floor(rng() * a.length)];
   const W = opts.result === 'win' ? 'A' : opts.result === 'lose' ? 'B' : null;
   const Lside = W ? (W === 'A' ? 'B' : 'A') : null;
 
@@ -668,11 +669,11 @@ function planDeathSounds(frames, opts) {
   // comeback: the eventual winner was down by 2+ cards; starts on the first loser death after that
   if (W) {
     const k = frames.findIndex(f => f[W].length >= 1 && f[Lside].length - f[W].length >= 2);
-    if (k >= 0) { const d = deaths.find(d => d.i > k && d.side === Lside); if (d) add(d.i, { path: SPECIAL.comeback }); }
+    if (k >= 0) { const d = deaths.find(d => d.i > k && d.side === Lside); if (d) add(d.i, { path: pick(SPECIAL.comeback) }); }
   }
   // last death: landslide (winner still has 3+ alive) and a 15% rare sound
-  if (W && last.side === Lside && frames[last.i][W].length >= 3) add(last.i, { path: SPECIAL.landslide });
-  if (rng() < 0.15) add(last.i, { path: SPECIAL.rare });
+  if (W && last.side === Lside && frames[last.i][W].length >= 3) add(last.i, { path: pick(SPECIAL.landslide) });
+  if (rng() < 0.15) add(last.i, { path: pick(SPECIAL.rare) });
   // no problem's 2nd kill: plays alone and only once
   const kills = {};
   for (const d of deaths) {
