@@ -138,7 +138,7 @@ const UNITS = {
   },
   vodafoneprime: {
     name: 'vodafone ceo prime', tier: 6, atk: 5, hp: 7, img: 'vodafoneprime.png', secret: true,
-    text: L => `woto tolff, powered up by the vodafone call. <b>start of battle:</b> plant a chip on the strongest enemy, -${3 * L} attack, and -${L} attack for every other enemy. takes double damage from john tanner. immune to the vodafone call burn: when anyone's vodafone call goes off in a battle he doubles his stats for that battle. the vodafone call is food for him in the shop`,
+    text: L => `woto tolff, powered up by the vodafone call. <b>start of battle:</b> plant a chip on the strongest enemy, -${3 * L} attack, and -${L} attack for every other enemy. takes double damage from john tanner. immune to the vodafone call burn: when anyone's vodafone call goes off in a battle he doubles his stats for that battle (a first call on woto tolff gives +3/+3 and a level for good). the vodafone call is food for him in the shop (+3/+3)`,
     on: {
       startBattle(c, u, L) {
         const foes = c.team(c.other(u.side)).filter(e => !e.dead);

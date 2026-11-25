@@ -212,8 +212,9 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
         const ceos = c.all().filter(isCeo);
         if (ceos.length) {
           ceos.forEach(x => {
-            c.buff(x, x.atk, x.hp);
-            if (x.id === 'vodafone') {   // the first call turns him into vodafone ceo prime for good: +1 level, and he keeps the stats he has right now
+            if (x.id !== 'vodafone') c.buff(x, x.atk, x.hp);   // prime: doubles for this battle only
+            else {   // the first call turns him into vodafone ceo prime for good: +3/+3, +1 level, kept after the battle
+              c.buff(x, 3, 3);
               x.id = 'vodafoneprime'; x.name = UNITS.vodafoneprime.name;
               if (x.lvl < maxLevel()) { x.exp = Math.max(x.exp, expForLevel(x.lvl + 1)); x.lvl = levelOf(x.exp); }
               primed.push({ side: x.side, uid: x.srcUid, atk: x.atk, hp: x.hp, exp: x.exp });

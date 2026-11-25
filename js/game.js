@@ -303,17 +303,15 @@ function useItem(itemIdx, slot) {
   sel = null; saveRun(); renderShop();
 }
 
-// the vodafone call is food for the vodafone ceo: the stats boost of the call (x2, x1.3 at level 3).
+// the vodafone call is food for the vodafone ceo: +3/+3.
 // the first one turns vodafone ceo into vodafone ceo prime and unlocks him
 function unlockWoto() { try { localStorage.setItem('np_secret_woto', '1'); } catch (e) {} ACH.unlock('wototolff'); }
 function feedCeo(u) {
-  const mul = lvl(u) >= 3 ? 1.3 : 2;
-  const da = Math.round(u.atk * (mul - 1)), dh = Math.round(u.hp * (mul - 1));
   const a0 = u.atk, h0 = u.hp;
-  u.atk = capAdd(u.atk, da); u.hp = capAdd(u.hp, dh);
+  u.atk = capAdd(u.atk, 3); u.hp = capAdd(u.hp, 3);   // just under the 480v transformer (+4/+4)
   logBuff(u, u.atk - a0, u.hp - h0, 'vodafone call');
   if (u.id === 'vodafone') { u.id = 'vodafoneprime'; unlockWoto(); toast('woto tolff becomes vodafone ceo prime'); }
-  else toast(`vodafone ceo prime eats the call: x${mul}`);
+  else toast('vodafone ceo prime eats the call: +3/+3');
 }
 
 // a vodafone call went off in the battle and turned vodafone ceo into prime: he keeps his level and stats
