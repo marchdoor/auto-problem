@@ -762,3 +762,8 @@ body.endless .wins-max { display: none; }
 .pred-info { margin: 0; font: 13px Arial; color: var(--muted, #aaa); text-align: center; }
 .pred-leave { position: absolute; top: -34px; right: 0; font-size: 13px; padding: 4px 10px; }
 @media (max-width: 760px) { .pred-panel { position: sticky; transform: none; left: auto; bottom: 8px; margin: 8px auto 0; } .pred-btns button { font-size: 15px; } }
+
+#card-tip { position: fixed; display: none; z-index: 60; max-width: 300px; background: rgba(0,0,0,.92); border: 2px solid #fff; border-radius: 10px; padding: 8px 10px; pointer-events: none; font: 13px/1.35 Arial; }
+#card-tip b { font-size: 15px; }
+#card-tip .t { color: var(--muted, #aaa); font-size: 12px; margin: 2px 0 4px; }
+#card-tip .it { margin-top: 5px; padding-top: 5px; border-top: 1px solid #555; }

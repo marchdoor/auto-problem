@@ -385,7 +385,7 @@ function cardEl(u, opts = {}) {
   const d = UNITS[u.id];
   const el = document.createElement('div');
   el.className = 'card' + (opts.sel ? ' sel' : '') + (opts.frozen ? ' frozen' : '');
-  el.dataset.uid = u.uid;
+  el.dataset.uid = u.uid; el.dataset.id = u.id; el.dataset.atk = u.atk; el.dataset.hp = u.hp; el.dataset.item = u.item || '';
   const L = u.lvl || levelOf(u.exp || 0), exp = u.exp || 0;
   const src = imgSrc(u.id, u.alt);
   const pr = expProgress(exp);

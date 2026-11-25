@@ -132,3 +132,26 @@ document.addEventListener('DOMContentLoaded', () => {
   on('btn-stats', () => STATS.open());
   on('btn-custom', customRunMenu);
 });
+
+// ---- hover tooltip in battles (and in foi predict): what a character does ----
+(function () {
+  let tip = null, mx = 0, my = 0, hideT = null;
+  const show = c => {
+    const d = UNITS[c.dataset.id]; if (!d) return hide();
+    const L = levelOf(+c.dataset.exp || 0) , lv = +(c.querySelector('.lvl') ? (c.querySelector('.lvl').textContent.match(/lvl (\d+)/) || [0, 1])[1] : 1);
+    const it = c.dataset.item && ITEMS[c.dataset.item];
+    if (!tip) { tip = document.createElement('div'); tip.id = 'card-tip'; document.getElementById('app').appendChild(tip); }
+    tip.innerHTML = `<b>${d.name}</b><div class="t">tier ${d.tier} · level ${lv} · ${c.dataset.atk}/${c.dataset.hp}${(d.tags || []).includes('nike') ? ' · nike inc.' : ''}</div><div class="ab">${d.text(lv)}</div>${it ? `<div class="it"><b>${it.name}</b>: ${it.text}</div>` : ''}`;
+    tip.style.display = 'block';
+    const w = tip.offsetWidth, h = tip.offsetHeight, W = window.innerWidth, H = window.innerHeight;
+    let x = mx + 16, y = my + 16; if (x + w > W - 6) x = mx - w - 16; if (y + h > H - 6) y = my - h - 16;
+    tip.style.left = Math.max(6, x) + 'px'; tip.style.top = Math.max(6, y) + 'px';
+  };
+  const hide = () => { if (tip) tip.style.display = 'none'; };
+  const cardAt = () => { const e = document.elementFromPoint(mx, my); return e && e.closest ? e.closest('#battle .card') : null; };
+  document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; const c = cardAt(); if (c) show(c); else hide(); });
+  // the battle redraws its cards all the time, so look again under the pointer a few times a second
+  setInterval(() => { if (!tip || tip.style.display === 'none') return; const c = cardAt(); if (c) show(c); else hide(); }, 300);
+  // touch: tap a card to read it, it fades after a few seconds
+  document.addEventListener('touchstart', e => { const t = e.touches[0]; mx = t.clientX; my = t.clientY; const c = cardAt(); if (c) { show(c); clearTimeout(hideT); hideT = setTimeout(hide, 4000); } else hide(); }, { passive: true });
+})();
