@@ -605,10 +605,11 @@ function applyFusions(list, side) {
 function applyNegevBan(quiet) {
   if (!S) return;
   S.noItems = S.noItems || {};
-  S.noItems.negev = true;
-  (S.team || []).forEach(u => { if (u && u.item === 'negev') u.item = null; });
-  if (S.shop && S.shop.items) S.shop.items = S.shop.items.filter(x => x.id !== 'negev');
-  if (!quiet) toast('the negev is banned for the rest of the run');
+  S.noItems.negev = true; S.noItems.vnegev = true;
+  const ng = i => i === 'negev' || i === 'vnegev';
+  (S.team || []).forEach(u => { if (u && ng(u.item)) u.item = null; });
+  if (S.shop && S.shop.items) S.shop.items = S.shop.items.filter(x => !ng(x.id));
+  if (!quiet) toast('the negev and vodafone essence negev are banned for the rest of the run');
 }
 
 // make tent bro: the holder never came back because the rest of its team died first

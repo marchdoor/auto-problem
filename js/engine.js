@@ -197,13 +197,14 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
       noSummon = false;
       // dr. funnyheimer and barbie venom: every negev on the field is deleted and the item is banned for the run
       if (died.id === 'funny' || died.id === 'venom') {
-        const hs = T.A.concat(T.B).filter(x => x.item === 'negev');
-        if (died.item === 'negev') hs.push(died);
+        const isNg = x => x.item === 'negev' || x.item === 'vnegev';
+        const hs = T.A.concat(T.B).filter(isNg);
+        if (isNg(died) && !hs.includes(died)) hs.push(died);
         if (hs.length) {
           hs.forEach(x => { x.item = null; c.fx(x, 'ability'); });
           pendingFx.push({ uid: died.uid, type: 'negevban', who: died.id });
           stats.negevBan = true;
-          pendingCap = `${died.name} deletes every negev. the negev is banned for the rest of the run`; pendingSfx.push('nuke');
+          pendingCap = `${died.name} deletes every negev and vodafone essence negev. both are banned for the rest of the run`; pendingSfx.push('nuke');
         }
       }
       if (died.item === 'vcall') {

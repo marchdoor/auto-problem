@@ -74,7 +74,7 @@ const UNITS = {
   // ---------------- TIER 2 ----------------
   venom: {
     name: 'barbie venom', tier: 2, atk: 2, hp: 3, img: 'venom', tags: ['mib'],
-    text: L => `<b>faint:</b> give 2 random friends +${L}/+${L}. if a negev is on the field it is deleted from everyone holding it and banned for the rest of the run. venom cries`,
+    text: L => `<b>faint:</b> give 2 random friends +${L}/+${L}. if a negev or vodafone essence negev is on the field it is deleted from everyone holding it and both are banned for the rest of the run. venom cries`,
     on: {
       faint(c, u, L) { c.randomAllies(u.side, 2).forEach(f => c.buff(f, L, L)); c.caption('venom cries and nukes'); }
     }
@@ -111,7 +111,7 @@ const UNITS = {
   // ---------------- TIER 3 ----------------
   funny: {
     name: 'dr. funnyheimer', tier: 3, atk: 3, hp: 3, img: 'funny', tags: ['mib'],
-    text: L => `<b>faint:</b> negev nuke, deal ${2 * L} damage to EVERYONE. if a negev is on the field it is deleted from everyone holding it and banned for the rest of the run. free sacrifice`,
+    text: L => `<b>faint:</b> negev nuke, deal ${2 * L} damage to EVERYONE. if a negev or vodafone essence negev is on the field it is deleted from everyone holding it and both are banned for the rest of the run. free sacrifice`,
     on: {
       faint(c, u, L) { c.caption('free sacrifice and negev nuke'); c.sfx('nuke'); c.all().forEach(t => c.damage(t, 2 * L, u, 'nuke')); }
     }
