@@ -6,7 +6,7 @@
 //  Zombies are tagged 'zombie' (the 1911 and the fire zombie care about that).
 // ============================================================
 const PACKS = {
-  unturned: { name: 'unturned dlc', text: '6 zombies, 14 items and random foods. adds bleeding and poison to battles.' },
+  unturned: { name: 'unturned dlc', text: '6 zombies, a cardboard sniper, 14 items and random foods. adds bleeding and poison to battles.' },
 };
 let ACTIVE_PACKS = {};
 const packOk = d => !d.pack || !!ACTIVE_PACKS[d.pack];
@@ -43,6 +43,22 @@ Object.assign(UNITS, {
     name: 'ghost of miami zombie', tier: 3, atk: 3, hp: 4, img: 'miamiz.png', tags: ['zombie'], pack: 'unturned', bleed: 0.12, on: {},
     text: L => `zombie. ${Math.round(100 * (0.15 + 0.1 * L))}% chance to avoid an attack completely (higher with levels)`
   },
+  sniper: {
+    name: 'cardboard sniper', tier: 4, atk: 2, hp: 3, img: 'sniper.png', pack: 'unturned',
+    text: L => `his normal attack only does <b>half damage</b> up front. <b>every 3rd turn</b>, from any place on the team, he fires a sniper shot: ${2 * L} + half his attack damage to the front enemy, and it pierces through ${L} more enem${L > 1 ? 'ies' : 'y'} behind it for ${50 + 10 * (L - 1)}% of that. a metal scrap gives him 2 experience`,
+    on: {
+      roundStart(c, u, L) {
+        u.flags.shots = (u.flags.shots || 0) + 1;
+        if (u.flags.shots % 3) return;
+        const foes = c.team(c.other(u.side)).filter(e => !e.dead);
+        if (!foes.length) return;
+        const dmg = Math.ceil(u.atk / 2) + 2 * L, pct = 0.5 + 0.1 * (L - 1);
+        c.caption('the cardboard sniper takes the shot'); c.sfx('hit');
+        c.damage(foes[0], dmg, u, 'snipe');
+        foes.slice(1, 1 + L).forEach(e => c.damage(e, Math.max(1, Math.round(dmg * pct)), u, 'snipe'));
+      }
+    }
+  },
   bigz: {
     name: 'big nigga', tier: 5, atk: 6, hp: 16, img: 'bigz.png', tags: ['zombie'], pack: 'unturned', bleed: 0.1, on: {},
     text: L => `zombie. very tanky. he winds up for a turn, then throws a rock on the next. each rock has a ${Math.round(100 * (0.12 + 0.04 * L))}% chance to kill on the spot`
@@ -65,7 +81,7 @@ Object.entries(FOOD).forEach(([k, f]) => {
   };
 });
 Object.assign(ITEMS, {
-  scrap: { name: 'metal scrap', tier: 3, img: 'scrap.png', fit: 'contain', pack: 'unturned', text: 'gives +1 experience to the character of your choice', use(s, u) { s.addExp(u, 1); } },
+  scrap: { name: 'metal scrap', tier: 1, img: 'scrap.png', fit: 'contain', pack: 'unturned', text: 'gives +1 experience to the character of your choice (+2 for the cardboard sniper)', use(s, u) { s.addExp(u, u.id === 'sniper' ? 2 : 1); } },
   dressing: { name: 'dressing', tier: 4, img: 'dressing.png', fit: 'contain', pack: 'unturned', food: false, text: 'food. +6 permanent health', use(s, u) { s.buff(u, 0, 6); } },
   ladder: { name: 'ladder fail', tier: 3, img: 'ladder.png', fit: 'contain', equip: true, pack: 'unturned', text: 'equip: once per battle, on its first attack it makes the enemy in front bleed and skip its turn' },
   fullmoon: { name: 'full moon', tier: 4, img: 'fullmoon.png', fit: 'contain', equip: true, pack: 'unturned', text: 'equip: +4/+4 at the start of each battle (only for that battle) and its hits have a 25% chance to cause bleeding' },

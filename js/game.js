@@ -726,7 +726,13 @@ async function playBattle(frames, opts = {}) {
     let hold, closeCut = false;
     if (syncEnd) hold = wSum[i] > 0 ? Math.max(40, (syncEnd - Date.now() - fSum[i]) * w[i] / wSum[i]) : 0;
     const starting = cuts.find(c => c.k === i && !c.after);
-    if (starting && !syncEnd) {
+    // start-of-battle videos play alongside the battle (it keeps running while they play)
+    if (starting && starting.overlay && !syncEnd) {
+      if (!CUT.active && CUT.open(starting.key)) {
+        CUT.markSeen(starting.key); CUT.overlay = true;
+        const v = CUT.v; v.addEventListener('ended', () => { if (CUT.v === v) CUT.close(); }, { once: true });
+      }
+    } else if (starting && !syncEnd && !CUT.overlay) {
       // the video plays and the frames up to the death are stretched, so it ends right as that death happens
       cut = starting;
       const total = CUTSCENES[cut.key].dur * 1000, n = cut.d - cut.k;
@@ -741,7 +747,7 @@ async function playBattle(frames, opts = {}) {
     if (cut && i >= cut.d) cut = null;
     // a video that plays right after something happens (the bomb has just gone off)
     const late = !syncEnd && !skipping && cuts.find(c => c.after && c.k === i);
-    if (late && CUT.open(late.key)) {
+    if (late && !CUT.overlay && CUT.open(late.key)) {
       CUT.markSeen(late.key);
       await CUT.wait(Math.max(0, CUTSCENES[late.key].dur * 1000 - 150));
       CUT.close(skipping);
@@ -750,6 +756,11 @@ async function playBattle(frames, opts = {}) {
   }
   if (syncEnd) speed = savedSpeed;
   if (opts.sudden && CUT.sd) { Audio2.stopMusic(); CUT.lastDeath(); }   // skipped, or the last death never fired
+  else if (CUT.active && CUT.overlay && !skipping) {   // a start-of-battle video that is longer than the battle: let it finish
+    const t0 = Date.now();
+    while (CUT.active && !skipping && Date.now() - t0 < 60000) await new Promise(r => setTimeout(r, 100));
+    if (CUT.active) CUT.close(skipping);
+  }
   else if (CUT.active && !CUT.sd && !CUT.lastOn) CUT.close(true);
   if (prev) { try { renderBattleTeams(prev); } catch (e) { console.error(e); } }
   try { ACH.frames(frames); } catch (e) { console.error(e); }

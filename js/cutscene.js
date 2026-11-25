@@ -106,7 +106,7 @@ const CUT = {
         }
         if (['noproblem', 'yesproblem'].includes(x.killerId)) {
           const kc = (killCount[x.killerUid] = (killCount[x.killerUid] || 0) + 1);
-          if (kc >= 5) add({ k: 0, d: 0, key: 'noyes5', uid: x.killerUid, pri: 99 });   // plays at the start of the battle
+          if (kc >= 5) add({ k: 0, d: 0, key: 'noyes5', uid: x.killerUid, pri: 99, overlay: true });   // plays at the start of the battle
           if (kc >= 3) {   // 3, 4, 5... kills: the video runs until the last of them
             const ex = out.find(o => o.key === 'noyes3' && o.uid === x.killerUid);
             if (ex) ex.d = d; else add({ k: firstAttack(x.killerUid, d), d, key: 'noyes3', uid: x.killerUid });
@@ -134,7 +134,7 @@ const CUT = {
         // a member of the nfs mafia kills giuseppe n°44: the video runs on his death turn
         if (victim === 'g44' && ['troop', 'nfsvp'].includes(x.killerId)) add({ k: attackFrame(x.killerUid, d), d, key: 'nfsg44', pri: 2 });
         // john tanner is going to die to a nike inc unit: played at the start of the battle
-        if (victim === 'john' && x.killerId && ((UNITS[x.killerId] || {}).tags || []).includes('nike')) add({ k: 0, d: 0, key: 'johnsoon', pri: 40 });
+        if (victim === 'john' && x.killerId && ((UNITS[x.killerId] || {}).tags || []).includes('nike')) add({ k: 0, d: 0, key: 'johnsoon', pri: 40, overlay: true });
         // 7. janner tohn kills giuseppe n.84 (a numbered clone)
         if (x.killerId === 'janner' && nameOf[x.uid] === 'giuseppe n.84') add({ k: attackFrame(x.killerUid, d), d, key: 'clone84', pri: 3 });
         // 8. no problem kills john tanner: the video starts the turn before
@@ -164,7 +164,7 @@ const CUT = {
           if (j > b && frames[j].fx.some(y => y.type === 'attack')) break;
           if (frames[j].fx.some(y => y.type === 'faint' && y.killerUid === x.owner && ['noproblem', 'yesproblem'].includes(idOf[y.uid]))) { kd = j; break; }
         }
-        if (kd >= 0) { add({ k: 0, d: 0, key: 'kenjinuke', pri: 50 }); return; }
+        if (kd >= 0) { add({ k: 0, d: 0, key: 'kenjinuke', pri: 50, overlay: true }); return; }
       }
       const mine = f[x.ownerSide] || [];
       const both = ['john', 'janner'].every(id => mine.some(u => u.id === id && !u.dead));
@@ -223,7 +223,7 @@ const CUT = {
   close(fast) {
     const el = this.el; if (!el) return;
     const v = this.v, key = this.key, seen = this.seen && !this.noAch; this.noAch = false;
-    this.el = null; this.v = null; this.active = false; this.lastOn = false;
+    this.el = null; this.v = null; this.active = false; this.lastOn = false; this.overlay = false;
     if (this.sd) { clearInterval(this.sd.timer); this.sd = null; }
     Audio2.setDuck(1, fast ? 150 : 1100);
     if (seen && key) ACH.unlock(CUTSCENES[key].ach);

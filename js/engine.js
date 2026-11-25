@@ -421,6 +421,9 @@ function simulateBattle(teamA, teamB, seed, opts = {}) {
     // fent reactor: the first attack hits for double
     if (a.item === 'fent' && !a.flags.fentFirst) { dmgA *= 2; a.flags.fentFirst = true; }
     if (b.item === 'fent' && !b.flags.fentFirst) { dmgB *= 2; b.flags.fentFirst = true; }
+    // the cardboard sniper's normal attack is only half damage
+    if (a.id === 'sniper') dmgA = Math.max(1, Math.ceil(dmgA / 2));
+    if (b.id === 'sniper') dmgB = Math.max(1, Math.ceil(dmgB / 2));
     // too sick to attack (bad food), or the big man winding up / throwing a rock
     const wind = (x, y, d) => {
       if (x.flags.skipFirst) { x.flags.skipFirst = false; c.caption(`${x.name} is too sick to attack`); return 0; }
